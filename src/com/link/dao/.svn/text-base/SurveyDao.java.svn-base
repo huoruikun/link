@@ -1,0 +1,100 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-8 下午03:08:04
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+/**
+ * @author alex.lee at 2010-11-8 下午03:08:04
+ *
+ * desc： 
+ */
+@Repository("surveyDao")
+public class SurveyDao extends BaseJdbcSupport{
+	
+	public boolean isSurvey(final int survey_id, final int cid){
+		if(cid !=0){
+			String SQL = "select id from survey_client where cid="+cid+" and survey_id="+survey_id;
+			List<Integer> cids = this.getJdbcTemplate().query(SQL,new dataMapper());
+			if(cids !=null && cids.size()>0){ //有过投票
+				return true;
+			}			
+		}
+		return false;
+	}
+	
+	public boolean saveSurveyClient(final int survey_id, final int cid, final String phoneNumber){
+		if(!isSurvey(survey_id, cid)){
+			final String ADD_SQL = "INSERT INTO survey_client(survey_id, cid, phoneNumber)values(?, ?, ?)";
+			this.getJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection.prepareStatement(ADD_SQL,
+							new String[] { "survey_id, cid, phoneNumber"});
+					ps.setInt(1,survey_id);
+					ps.setInt(2,cid);
+					ps.setString(3, phoneNumber);
+					return ps;
+				}
+			});
+		}
+		return true;
+	}
+	
+	public boolean saveSurveyResult(final int survey_id, final int cid, final int questionId,final int optionId, final String answer) {
+		try{
+			
+			//String SQL_QUERY = "select id from survey_result where question_id="+questionId+" and option_id = "+optionId;
+			//List<Integer> list = this.getJdbcTemplate().query(SQL_QUERY,new dataMapper());
+			
+			//if(list !=null && list.size()>0){ //有该选项
+			//	String SQL = "update survey_result set survey_count = survey_count+1 where question_id="+questionId+" and option_id = "+optionId;
+			//	this.getJdbcTemplate().update(SQL);
+			//}else{ 
+			
+			// 用户提交信息：如果是选项，option_id > 0, 如果是回答类型的，option_id==-1, option有内容
+				final String ADD_SQL2 = "INSERT INTO survey_result(survey_id, cid, question_id,option_id, answer, survey_count)values(?,?,?,?,?,?)";
+				this.getJdbcTemplate().update(new PreparedStatementCreator() {
+					public PreparedStatement createPreparedStatement(
+							Connection connection) throws SQLException {
+						PreparedStatement ps = connection.prepareStatement(ADD_SQL2,
+								new String[] { "survey_id, cid, question_id,option_id,answer,survey_count"});
+						ps.setInt(1, survey_id);
+						ps.setInt(2, cid);
+						ps.setInt(3,questionId);
+						ps.setInt(4,optionId);
+						ps.setString(5, answer);
+						ps.setInt(6,1);
+						return ps;
+					}
+				});
+			//}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return true;
+	}
+
+	private class dataMapper implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getInt("id");
+		}
+	}
+
+}

@@ -1,0 +1,207 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.OutputStream;
+import java.io.PrintWriter;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.FetchInfo;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.IHttpProxyService;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ShareController {
+	private static Logger logger = Logger.getLogger(ShareController.class);
+
+	public static final String defaultPage = "http://mp.wap.sohu.com/";
+
+	@Autowired
+	protected IClientService clientService;
+	@Autowired
+	protected IHttpProxyService httpProxyService;
+
+	@RequestMapping(value = "/share/news.go")
+	public String shareNews(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String targetPage = defaultPage;
+		
+		int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+		if (newsId > 0) {
+			int p = HttpUtil.getRequestInt(request, "p", 0);
+			String show = HttpUtil.getRequestString(request, "show", "");
+			targetPage = getUrlByNewsId(request, newsId, p, show);
+		}
+		
+			retrieveAndWriteData(request, response, targetPage);
+		 
+		return null;
+	}
+
+	@RequestMapping(value = "/share/paper.go")
+	public String sharePaper(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String targetPage = defaultPage;
+
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		if (termId > 0) {
+			targetPage = getUrlByTermId(request, termId);
+		}
+
+		retrieveAndWriteData(request, response, targetPage);
+		
+		return null;
+	}
+
+	@RequestMapping(value = "/share/grouppic.go")
+	public String shareGroupPic(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String targetPage = defaultPage; 
+		int groupId = HttpUtil.getRequestInt(request, "gid", 0);
+		if (groupId > 0) {
+			targetPage = getUrlByShareGroupId(request, groupId);
+		} 
+		retrieveAndWriteData(request, response, targetPage); 
+		return null;
+	}
+	
+	@RequestMapping(value = "/share/view.do", params = "m=groupPic")
+	public String shareGroupPicByView(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String targetPage = defaultPage; 
+		int groupId = HttpUtil.getRequestInt(request, "gid", 0);
+		if (groupId > 0) {
+			targetPage = getUrlByShareGroupId(request, groupId);
+		} 
+		retrieveAndWriteData(request, response, targetPage); 
+		return null;
+	}
+
+	private String getUrlByShareGroupId(HttpServletRequest request, int groupId) {  
+		String getUrl = "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/vm/mpnws_view.do?m=groupPic&gid="+groupId+"&picType=3"; 
+		return getUrl;
+	}
+	
+	
+	@RequestMapping(value = "/share/rss.go")
+	public String shareRss(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String targetPage = defaultPage;
+
+		int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+		if (newsId > 0) {
+			targetPage = getRssNewsUrl(request, newsId);
+		}
+
+		retrieveAndWriteData(request, response, targetPage);
+		
+		return null;
+	}
+	
+	private void retrieveAndWriteData(HttpServletRequest request,
+			HttpServletResponse response, String targetPage) {
+		String pageContent = "";
+		try {
+			pageContent = httpProxyService.getContentFromUrl(targetPage);
+			if (pageContent == null || "".equals(pageContent.trim())) {
+				try {
+					pageContent = HttpUtil.getUrlContent(defaultPage);
+				} catch (Exception e1) {
+					logger.error("Exception occured when getting content of "
+							+ defaultPage, e1);
+					pageContent = "";
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Exception occured when getting content of "
+					+ targetPage, e);
+			try {
+				pageContent = HttpUtil.getUrlContent(defaultPage);
+			} catch (Exception e1) {
+				logger.error("Exception occured when getting content of "
+						+ defaultPage, e1);
+				pageContent = "";
+			}
+		}
+
+		//PrintWriter out = null;
+		try {
+			byte[] data = pageContent.getBytes("utf-8");
+			//response.setContentType("text/html; charset=UTF-8");
+			response.setStatus(200);
+			response.setContentLength(data.length);
+			//out = response.getWriter();
+			//out.print(pageContent);
+			RenderUtil.renderHtml(response, pageContent);
+		} catch (Exception e) {
+			logger.error(
+					"Exception occured when writing data into output stream.",
+					e);
+		}
+	}
+
+	private String getRssNewsUrl(HttpServletRequest request, int newsId) {
+		return "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/news/articleHtml.go?newsId="
+				+ newsId;
+	}
+
+	private String getUrlByTermId(HttpServletRequest request, int termId) {
+		FetchInfo fetchInfo = clientService.getFetchInfoByTermId(termId);
+		int pageNum = fetchInfo.getPageNum();
+
+		int sid = this.getAdaptId();
+
+		String referSite = request.getParameter("referSite");
+		
+		String getUrl = "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/paper/view.do?m=list&fromShare=1&pageNum=" + pageNum
+				+ "&sid=" + sid + "&termId=" + termId + "&referSite=" + referSite;
+
+		return getUrl;
+	}
+
+	private String getUrlByNewsId(HttpServletRequest request, int newsId, int p, String show) {
+		/*FetchInfo fetchInfo = clientService.getFetchInfoByNewsId(newsId);
+		if(fetchInfo == null){
+			return "http://3g.k.sohu.com/";
+		}*/
+		int sid = 1;
+		int i = 1;
+		if (p == 0) {
+
+		} else {
+			i = p;
+		}
+
+		sid = this.getAdaptId();
+
+		String referSite = request.getParameter("referSite");
+		
+		String getUrl = "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/paper/view.do?m=news&fromShare=1&sid=" + sid
+				+ "&pubId=&termId=&pageNum=&newsType=&short=&newsId=" + newsId
+				+ "&p=" + i + "&show=" + show + "&referSite=" + referSite;
+
+		return getUrl;
+	}
+
+	private int getAdaptId() {
+		return 2;// 18px android
+	}
+
+}

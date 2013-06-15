@@ -1,0 +1,324 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.ByteArrayInputStream;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.dom4j.DocumentException;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.dom4j.Node;
+import org.w3c.dom.Document;
+import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
+import org.xml.sax.helpers.DefaultHandler;
+import org.xml.sax.helpers.XMLReaderFactory;
+
+/**
+ * 处理XML的工具类，负责解析XML字符串
+ * 
+ */
+public final class XmlUtils {
+
+	public static String stripNonValidXMLCharacters(String in) {
+		StringBuffer out = new StringBuffer(); // Used to hold the output.
+		char current; // Used to reference the current character.
+		if (in == null || ("".equals(in)))
+			return ""; // vacancy test.
+		for (int i = 0; i < in.length(); i++) {
+			current = in.charAt(i); // NOTE: No IndexOutOfBoundsException caught
+									// here; it should not happen.
+			if ((current == 0x9) || (current == 0xA) || (current == 0xD) || ((current >= 0x20) && (current <= 0xD7FF))
+					|| ((current >= 0xE000) && (current <= 0xFFFD)) || ((current >= 0x10000) && (current <= 0x10FFFF)))
+				out.append(current);
+		}
+		return out.toString();
+	}
+
+	public static XMLReader getXmlReader() {
+		try {
+			return XMLReaderFactory.createXMLReader();
+		} catch (final SAXException e) {
+			throw new RuntimeException("Unable to create XMLReader", e);
+		}
+	}
+
+	/**
+	 * 根据元素名取元素值
+	 * 
+	 * @param xmlAsString
+	 * @param element
+	 * @return
+	 */
+	public static List getTextForElements(final String xmlAsString, final String element) {
+
+		final List elements = new ArrayList();
+		final XMLReader reader = getXmlReader();
+
+		final DefaultHandler handler = new DefaultHandler() {
+
+			private boolean foundElement = false;
+
+			private StringBuffer buffer = new StringBuffer();
+
+			@Override
+			public void startElement(final String uri, final String localName, final String qName,
+					final Attributes attributes) throws SAXException {
+				if (localName.equals(element)) {
+					foundElement = true;
+				}
+			}
+
+			@Override
+			public void endElement(final String uri, final String localName, final String qName) throws SAXException {
+				if (localName.equals(element)) {
+					foundElement = false;
+					elements.add(buffer.toString());
+					buffer = new StringBuffer();
+				}
+			}
+
+			@Override
+			public void characters(char[] ch, int start, int length) throws SAXException {
+				if (foundElement) {
+					buffer.append(ch, start, length);
+				}
+			}
+		};
+
+		reader.setContentHandler(handler);
+		reader.setErrorHandler(handler);
+
+		try {
+			reader.parse(new InputSource(new StringReader(xmlAsString)));
+		} catch (final Exception e) {
+			return null;
+		}
+
+		return elements;
+	}
+
+	/**
+	 * 根据元素名取元素值
+	 * 
+	 * @param xmlAsString
+	 * @param element
+	 * @return
+	 */
+	public static String getTextForElement(final String xmlAsString, final String element) {
+		final XMLReader reader = getXmlReader();
+		final StringBuffer buffer = new StringBuffer();
+
+		final DefaultHandler handler = new DefaultHandler() {
+
+			private boolean foundElement = false;
+
+			@Override
+			public void startElement(final String uri, final String localName, final String qName,
+					final Attributes attributes) throws SAXException {
+				if (localName.equals(element)) {
+					foundElement = true;
+				}
+			}
+
+			@Override
+			public void endElement(final String uri, final String localName, final String qName) throws SAXException {
+				if (localName.equals(element)) {
+					foundElement = false;
+				}
+			}
+
+			@Override
+			public void characters(char[] ch, int start, int length) throws SAXException {
+				if (foundElement) {
+					buffer.append(ch, start, length);
+				}
+			}
+		};
+
+		reader.setContentHandler(handler);
+		reader.setErrorHandler(handler);
+
+		try {
+			reader.parse(new InputSource(new StringReader(xmlAsString)));
+		} catch (final Exception e) {
+			return null;
+		}
+
+		return buffer.toString();
+	}
+
+	public static Document getDomDocument(String xmlString) {
+
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		Document document = null;
+		try {
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			document = builder.parse(new ByteArrayInputStream(xmlString.getBytes()));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return document;
+	}
+
+	/**
+	 * 在xml字符串中根据多个元素名查找元素的值，返回类型为Map，key为元素名，value为List,是该元素名对应的元素值列表。
+	 * 
+	 * @param xmlAsString
+	 * @param elementName
+	 * @return
+	 */
+	public static Map<String, List<String>> getTextForElements(final String xmlAsString, final List<String> elementName) {
+
+		final Map<String, List<String>> map = new HashMap<String, List<String>>();
+		for (String name : elementName) {
+			map.put(name, new ArrayList<String>());
+		}
+		final XMLReader reader = getXmlReader();
+
+		final DefaultHandler handler = new DefaultHandler() {
+
+			private boolean foundElement = false;
+
+			private StringBuffer buffer = new StringBuffer();
+
+			@Override
+			public void startElement(final String uri, final String localName, final String qName,
+					final Attributes attributes) throws SAXException {
+				if (elementName.contains(localName)) {
+					foundElement = true;
+				}
+			}
+
+			@Override
+			public void endElement(final String uri, final String localName, final String qName) throws SAXException {
+				if (elementName.contains(localName)) {
+					map.get(localName).add(buffer.toString());
+					buffer = new StringBuffer();
+				}
+			}
+
+			@Override
+			public void characters(char[] ch, int start, int length) throws SAXException {
+				if (foundElement) {
+					buffer.append(ch, start, length);
+				}
+			}
+		};
+
+		reader.setContentHandler(handler);
+		reader.setErrorHandler(handler);
+
+		try {
+			reader.parse(new InputSource(new StringReader(xmlAsString)));
+		} catch (final Exception e) {
+			return null;
+		}
+
+		return map;
+	}
+
+	public static Map xmlToMap(String xml) throws DocumentException {
+		Map result = null;
+
+		/* 字符串形式的xml -> dom4j的xml */
+		org.dom4j.Document document = DocumentHelper.parseText(xml);
+
+		/* 遍历dom4j xml, 生成map */
+		org.dom4j.Element element = document.getRootElement();
+
+		// 最上层一定只有一个元素
+		result = xmlElementToMap(element);
+
+		return result;
+	}
+
+	/**
+	 * xml字符串 -〉 map
+	 * 
+	 * @param xml
+	 * @return
+	 * @throws DocumentException
+	 */
+	public static Map xmlElementToMap(org.dom4j.Element element) throws DocumentException {
+		Map result = new HashMap();
+		List<Map> tmpList = new ArrayList();// 处理过程中不能分辨map或list,先统一照List处理
+
+		/* 遍历dom4j xml, 生成map */
+		String name = element.getName();
+
+		String text = element.getText();
+
+		List<org.dom4j.Element> elementList = element.elements();
+
+		if (elementList.size() == 0) {// 叶节点
+			result.put(name, element.getData());
+		} else {// 非叶节点
+			// List<Element> elementList = element.elements();
+
+			if (name.toLowerCase().indexOf("list") >= 0) {// 队列
+				tmpList = new ArrayList();
+				for (int i = 0; i < elementList.size(); i++) {
+					org.dom4j.Element subElement = elementList.get(i);
+					Map node = xmlElementToMap(subElement);
+
+					tmpList.add(node);
+				}
+
+				result.put(name, tmpList);
+			} else {// 映射
+				for (int i = 0; i < elementList.size(); i++) {
+					org.dom4j.Element subElement = elementList.get(i);
+					Map node = xmlElementToMap(subElement);
+
+					result.putAll(node);
+				}
+			}
+		}
+
+		return result;
+	}
+
+	public static String getElemnetText(Element el, String path) {
+		if (el == null && path == null) {
+			return null;
+		}
+
+		if (path.contains("/")) {
+			List<Element> dataElList = (List<Element>) el.selectNodes(path);
+
+			if (dataElList != null) {
+				return dataElList.get(0).getText();
+			}
+		} else {
+			Element dataEl = el.element(path);
+			if (dataEl != null) {
+				return dataEl.getTextTrim();
+			}
+		}
+		return null;
+	}
+
+	public static Element getElemnet(Element el, String name) {
+		if (el == null || name == null) {
+			return null;
+		}
+		return el.element(name);
+	}
+
+	public static void main(String[] args) {
+		String newsAbstract = "【TechWeb报道】8月19日消息，卢星宇这位&amp;#8220;中非希望工程执行主席&amp;#8221;，因其24岁就当上&amp;#8220;主席&amp;#8221;，于是在短";
+		newsAbstract = ClientUtil.clearAllHtmlTag(newsAbstract);
+		newsAbstract = XmlUtils.getDomDocument(newsAbstract).toString();
+		System.out.println("newsAbstract=="+newsAbstract);
+	}
+
+}

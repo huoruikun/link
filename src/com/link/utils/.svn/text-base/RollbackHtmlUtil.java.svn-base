@@ -1,0 +1,41 @@
+package com.wap.sohu.mobilepaper.util;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+
+public class RollbackHtmlUtil {
+
+	public static boolean rollbackHtml(ClientUser clientUser, ClientInstall clientInstall) {
+
+		if (clientUser != null && "ZTE-C N760".equalsIgnoreCase(clientUser.getMachineId())) { 
+			if (clientInstall != null) {
+				if ("2.0.3".equalsIgnoreCase(clientInstall.getVersion())) {
+					System.out.println("rollbackHtml in 2.0.3==" + clientUser.getMachineId());
+					return true;
+				} else if (StringUtils.isBlank(clientInstall.getVersion())) {
+					int productId = clientInstall.getProductId() == 0 ? 1 : clientInstall.getProductId();
+					clientInstall = clientUser.getUserInstallProducIdChannelIdMap().get(productId);
+					System.out.println("rollbackHtml2222 in 2.0.3==" + clientUser.getMachineId() + "\t"
+							+ clientInstall.getVersion());
+					if (clientInstall != null && "2.0.3".equalsIgnoreCase(clientInstall.getVersion())) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	public static boolean rollbackHtml(ClientUser clientUser, int productId) { 
+		if (clientUser != null && "ZTE-C N760".equalsIgnoreCase(clientUser.getMachineId())) { 
+			ClientInstall clientInstall = clientUser.getUserInstallProducIdChannelIdMap().get(productId); 
+			if (clientInstall != null && "2.0.3".equalsIgnoreCase(clientInstall.getVersion())) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}

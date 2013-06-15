@@ -1,0 +1,71 @@
+package com.wap.sohu.mobilepaper.web;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.service.IAdService;
+import com.wap.sohu.mpaper.model.Advertisement;
+import com.wap.sohu.mpaper.util.HttpUtil;
+
+@Controller
+public class AdController {
+	@Autowired
+	private IAdService adService;
+	
+	public static int effectTime = 2 * 60 * 60;// 缓存有效时间 2h
+	
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+	
+	@RequestMapping("/ad/view.go")
+	public String view(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		int adId = HttpUtil.getRequestInt(request, "adId", 0);
+		int productId = HttpUtil.getRequestInt(request, "pId", 0);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int siteIndex = HttpUtil.getRequestInt(request, "si", 0);
+		String cid = request.getParameter("p1");
+		
+		if (adId > 0) {
+			String key = "ad_" + adId + "_v04";
+
+			Advertisement ad = null;
+			if (clientNewsCache != null) {
+				ad = (Advertisement) clientNewsCache.get(key);
+				if (ad == null) {
+					ad = adService.getAdvertisement(adId);
+					clientNewsCache.set(key, effectTime, ad);
+				}
+			} else {
+				ad = adService.getAdvertisement(adId);
+			}
+			
+			if (ad != null) {
+				LogWriter.adlog("adId: " + ad.getId() + ", productId:"
+						+ productId + ", pubId: " + pubId + ", siteIndex: "
+						+ siteIndex + ", adLink: " + ad.getAdLink());
+				
+				try {
+					String target = ad.getAdLink();
+					if (target.indexOf("?") > -1) {
+						target += "&p1=" + cid;
+					} else {
+						target += "?p1=" + cid;
+					}
+					response.sendRedirect(target);
+				} catch (Exception e) {}
+			}
+		}
+		
+		return null;
+	}
+}

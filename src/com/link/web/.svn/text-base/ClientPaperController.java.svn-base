@@ -1,0 +1,560 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.PrePackUrl;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.model.UserPubCity;
+import com.wap.sohu.mobilepaper.service.IAreaService;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.IHttpProxyService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.IPublicationService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.PageUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+import com.wap.sohu.mobilepaper.util.ParseUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+import com.wap.sohu.mobilepaper.util.RollbackHtmlUtil;
+
+@Controller
+public class ClientPaperController extends ClientAPIServlet {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 3023991596598814312L;
+
+	private static final Logger logger = Logger.getLogger(ClientPaperController.class);
+
+	@Autowired
+	protected INewsService newsService;
+
+	@Autowired
+	protected IClientService clientService;
+
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+
+	@Autowired
+	IPublicationService publicationService;
+
+	@Autowired
+	protected IHttpProxyService httpProxyService;
+	@Autowired
+	protected IAreaService areaService;
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+
+	public static final int NEWS_CONTENT_EXPIRE_TIME = 60 * 60 * 2;// 取到内容的缓存时间
+
+	/**
+	 * 打开某个订阅下的最新一期报纸
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/paper/lastTermLink.go")
+	public String lastTermLink(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long startTime = System.currentTimeMillis();
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstall = (ClientInstall) request.getAttribute("clientInstall");
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		String pubIds = HttpUtil.getRequestString(request, "pubId", ""); // 刊物ID (非必须参数)
+		int subId = HttpUtil.getRequestInt(request, "subId", 0); // 订阅ID  (非必须参数)
+		int redirect = HttpUtil.getRequestInt(request, "redirect", 0);// redircet=0不跳转；没传就是接受跳转;redirect=2表示强制跳转
+		String redirectString = HttpUtil.getRequestString(request, "redirect", "");
+		int productId = 1; 
+		if (clientInstall != null) {
+			productId = clientInstall.getProductId();
+		}
+		int u = HttpUtil.getRequestInt(request, "u", 0); 
+		if (u > 0) {
+			productId = u;
+		} 
+		
+		List<Integer> pubIdList = null;
+		// TODO: 当subId没传时, 根据用户和产品ID, 获取该用户订阅的所有刊物ID列表
+		if (subId > 0) {
+			pubIdList = getPubIdList(productId, subId, pubIds);
+		} else {
+			if(clientUser != null) {
+				// HashMap<Integer,ArrayList<Integer>>
+				pubIdList = clientUser.getProducIdUserSubscribeMap().get(productId);
+			} else {
+				//default:搜狐早晚报( subId=107)
+				pubIdList = this.subscriptionService.getPubIdListBySubId(107);
+			}
+		}
+		
+		// 客户端适配ID
+		int sid = getSid(request);
+		String termName = "";
+		String termTime = "";
+		int pubId = 0;
+		// System.out.println("lastTermLink =="+subId+"\t"+pubIdList+"\t"+termId+"\t"+"\t"+productId);
+		// termId为非必须参数, 不传默认为0, 从所有刊物列表中取最新的termId
+		if (pubIdList.size() > 0 && termId == 0 ) {
+			List<PublicationTerm> termList = clientService.getLatestTerms(
+					pubIdList, clientUser, false, 0, 30);
+			if (termList != null && termList.size() > 0) {
+				termId = (int) termList.get(0).getId();
+				PublicationTerm termInfo = publicationService.findPublicationTerm(termId);
+				termName = termInfo.getPubTermName();
+				termTime = termList.get(0).getPublishTimeStr();
+				pubId = termInfo.getPublicId();
+				try {
+					termName = URLEncoder.encode(termName.trim(), "UTF-8");
+					termTime = URLEncoder.encode(termTime.trim(), "UTF-8");
+				} catch (UnsupportedEncodingException e) {
+					e.printStackTrace();
+				}
+				if (clientUser!=null && clientUser.getPlatform() != null) {
+					String platformLowCase = clientUser.getPlatform().toLowerCase();
+					//iphone用户不提供redirect参数，默认为跳转
+					if (platformLowCase.contains("iphone") && StringUtils.isBlank(redirectString) ) {
+						redirect = 1; 
+					}
+				}
+			}
+		}
+		if (termId > 0) {
+			if (redirect >= 1) {
+				// 如果需要跳转
+				System.out.println("useTime lastTermLink=" + (System.currentTimeMillis() - startTime) + "ms  termId="
+						+ termId);
+				return "redirect:term.go?sid=" + sid + "&termId=" + termId + "&pubId=" + pubId + "&redirect="
+						+ redirect + "&termName=" + termName + "&termTime=" + termTime;
+			} else {
+				// TODO: 否则,不跳转, /paper/term.go  打开期刊  (具体原因需要弄清楚)
+				request.setAttribute("termId", termId);
+				return paperTerm(model, request, response);
+			}
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/paper/view.do", params = "m=news")
+	public String viewPaperNews(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long startTime = System.currentTimeMillis();
+
+		String sid = request.getParameter("sid");
+		String termId = request.getParameter("termId");
+		String pubId = request.getParameter("pubId");
+		String pageNum = request.getParameter("pageNum");
+		String newsType = request.getParameter("newsType");
+		String shortStr = request.getParameter("short");
+		String p = request.getParameter("p");
+		String newsId = request.getParameter("newsId");
+		String show = request.getParameter("show");
+		String fromShare = request.getParameter("fromShare");
+		String referSite = request.getParameter("referSite");
+
+		StringBuffer sb = new StringBuffer();
+		sb.append("&sid=").append(sid).append("&pubId=").append(pubId).append("&termId=").append(termId)
+				.append("&pageNum=").append(pageNum).append("&newsType=").append(newsType).append("&short=")
+				.append(shortStr).append("&newsId=").append(newsId).append("&p=").append(p).append("&show=")
+				.append(show).append("&fromShare=").append(fromShare).append("&referSite=").append(referSite);
+
+		String url = "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/vm/view.do?m=news" + sb.toString();
+		// System.out.println(url);
+		String content = httpProxyService.getContentFromUrl(url);
+		model.addAttribute("Content", content);
+		long userTime = System.currentTimeMillis() - startTime;
+		System.out
+				.println("useTime viewPaperNews=" + (userTime) + "ms  newsId=" + newsId);
+		if(userTime>1000){
+			System.out.println("useTime viewPaperNews=" + (userTime) + "ms  newsId=" + newsId+"\t"+url);
+		}
+		
+		try {
+			//给输出加上contentType，不然会以下载的形式或者其他文件的形式打开
+			RenderUtil.renderHtml(response, content);
+		} catch (Exception e) {}
+		
+		return null;
+	}
+
+	@RequestMapping(value = "/paper/view.do", params = "m=list")
+	public String viewPaperNewsList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		return paperTerm(model, request, response);
+	}
+
+	@RequestMapping(value = "/paper/term.go")
+	public String paperTerm(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int termId = ParseUtil.paseInt(request.getParameter("termId"), 0);
+		if (termId == 0 && request.getAttribute("termId")!=null) { 
+			termId = ((Integer)request.getAttribute("termId"));
+		}
+		if (termId == 0) {
+			return "client/proxyPage";
+		}
+		long startTime = System.currentTimeMillis();
+		int sid = getSid(request);
+		PublicationTerm term = publicationService.findPublicationTerm(termId);
+		Publication publication = clientService.getPublicationFast(term.getPublicId());
+		int pubCityId = 0;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstall = (ClientInstall) request.getAttribute("clientInstall");
+		int productId = 1; 
+		int u = HttpUtil.getRequestInt(request, "u", 0);  
+		if (u > 0) {
+			productId = u;
+		}  else if (clientInstall != null) {
+			productId = clientInstall.getProductId();
+		}
+		if (publication != null && publication.getZipArea() == 1) {
+			long cid = 0;
+			if (clientUser != null) {
+				cid = clientUser.getCid();
+			}
+			UserPubCity userPubCity = areaService.getUserPubCity(cid, publication.getId());
+			if (userPubCity != null) {
+				pubCityId = userPubCity.getPubCityId();
+			}
+		}
+		
+		try {
+			StringBuffer termKey = new StringBuffer();
+		if (termId > 0 && sid > 0) {
+			String urlPre = "http://" + request.getLocalAddr() + ":"
+					+ request.getLocalPort() + request.getContextPath();
+			termKey.append("/vm/view.do?m=list&pageNum=1&fromClient=1&sid=");
+			termKey.append(sid);
+			termKey.append("&termId=");
+			termKey.append(termId);
+			termKey.append("&pubType=0&fromShare=");
+			termKey.append(HttpUtil.getRequestString(request, "fromShare", ""));
+			//termKey.append("&referSite=");
+			//termKey.append(HttpUtil.getRequestString(request, "referSite", "")); 
+			if(!RollbackHtmlUtil.rollbackHtml(clientUser, productId)){
+				if (clientUser != null) {
+					if (clientUser.getProtocol(productId) > 3) {
+						termKey.append("&selfAnalysis=" + 1);
+					} else if (clientUser.getProtocol() > 3) {
+						termKey.append("&selfAnalysis=" + 1);
+					}
+				}
+			}
+			if (pubCityId > 0) {
+				termKey.append("&pubCityId=" + pubCityId);
+			}
+			if (publication.getDisplayWeather() == 1) {
+				if (clientUser != null) {
+					int weatherCode = getWeatherCode(clientUser, publication);
+					termKey.append("&showWeather=1&weatherCode=" + weatherCode);
+				}
+			}
+			String mode= HttpUtil.getRequestString(request, "mode", "0");
+			//if(StringUtils.isNotBlank(mode)){
+			termKey.append("&mode=");
+			termKey.append(mode);
+			//}
+			
+			String content = "";
+			if (clientNewsCache != null) {
+				content = (String) clientNewsCache.get(termKey.toString()); 
+			}
+			if (StringUtils.isBlank(content)) {
+				String url=urlPre.concat(termKey.toString());
+				System.out.println("paperTerm url not in memechae=" + termKey.toString()+"\t"+url);
+				content = httpProxyService.getContentFromUrl(url);
+				if (clientNewsCache != null && StringUtils.isNotBlank(content)
+						&& !"not found".equalsIgnoreCase(content)) {
+					clientNewsCache.set(termKey.toString(), NEWS_CONTENT_EXPIRE_TIME, content);
+				}
+			}
+			if ("not found".equalsIgnoreCase(content)) {
+				content = "页面生成中，请稍后再试..";
+			}else if("".equalsIgnoreCase(content)){
+				content = "页面生成中，请稍后再试....";
+			}
+			model.addAttribute("Content", content);
+			response.addHeader("termId", String.valueOf(termId));
+			response.addHeader("pubId", String.valueOf(term.getPublicId()));
+			if (term.getPubTermName() != null) {
+				response.addHeader("termName", String.valueOf(PageUtil.getInstance().encode(term.getPubTermName().trim())));
+			} else {
+				response.addHeader("termName", "");
+			}
+			response.addHeader("termTime", String.valueOf(term.getPublishTimeStr())); 
+			System.out
+					.println("useTime paperTerm=" + (System.currentTimeMillis() - startTime) + "ms  termId=" + termId+"\t"+productId+"\t"+u+"\t");
+			
+			RenderUtil.renderHtml(response, content);
+		}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/paper/termZip.go")
+	public String paperTermZip(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int termId = ParseUtil.paseInt(request.getParameter("termId"), 0);
+		String zipPolicyType = HttpUtil.getRequestString(request, "zipType", "0");
+		PublicationTerm term = publicationService.findPublicationTerm(termId);
+		if (term != null) {
+			String ip = PaperUtil.getDownloadIP();
+			int sid = getSid(request);
+			ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+			ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+			Publication publication = clientService.getPublicationFast(term.getPublicId());
+			int platformId = clientUser.getPlatformId();
+			// 获得天气信息
+			int weatherCode = getWeatherCode(clientUser, publication);
+			int selfVersion = 21;
+			int zipPolicy = 2;
+			if ("all".equalsIgnoreCase(zipPolicyType) || "9".equalsIgnoreCase(zipPolicyType)) {
+				zipPolicy = 9;
+			} else if ("wifi".equalsIgnoreCase(zipPolicyType)) {
+				zipPolicy = 4;
+			} else {
+				zipPolicy = getZipPolice(clientUser, clientInstallSend, publication);
+			}
+			int pubCityId = getPubCityId(clientUser.getCid(), publication);
+			// long mapId = getMapId(clientUser.getCid(), term.getPublicId());
+			long mapId = 0;
+			String key = PaperUtil.getZipURLKey(term.getPublicId(), term.getId(), term.getPublishTime(), sid,
+					pubCityId, term.getId() + ".zip", zipPolicy, mapId, platformId, selfVersion, weatherCode);
+			String zipUrl = "http://" + ip + key;
+			if (!HttpUtil.openUrlCache(zipUrl)) {
+				String newZipUrl = PaperUtil.getURL(ip, term.getPublicId(), term.getId(), term.getPublishTime(), sid,
+						pubCityId, term.getId() + ".zip", zipPolicy, mapId, platformId, selfVersion, weatherCode);
+				if (StringUtils.isNotBlank(newZipUrl)) {
+					zipUrl = newZipUrl;
+				}
+			}
+			return "redirect:" + zipUrl;
+		}
+		return "client/proxyPage";
+	}
+
+	/**
+	 * 查某个订阅下的历史期刊列表
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/paper/history.go")
+	public String history(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		int p = HttpUtil.getRequestInt(request, "page", 1);
+		int pageSize = HttpUtil.getRequestInt(request, "num", 20);
+		if (pageSize > 30) {
+			pageSize = 30;
+		}
+		int pageNumber = HttpUtil.getRequestInt(request, "pn", 1);
+		ClientUser clientUser = clientService.getClientUserFromRequest(request);
+		ClientInstall clientInstall = (ClientInstall) request.getAttribute("clientInstall");
+		String pubIds = HttpUtil.getRequestString(request, "pubId", "");
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		String localListStr = HttpUtil.getRequestString(request, "locallist");
+		
+		int productId = 1; 
+		if (clientInstall != null) {
+			productId = clientInstall.getProductId();
+		}
+		int u = HttpUtil.getRequestInt(request, "u", 0); 
+		if (u > 0) {
+			productId = u;
+		} 
+
+		// List<PublicationTerm> termList = clientService.getLatestTerms(
+		// getPubIdList(productId, subId, pubIds),
+		// clientUser, true, (pageNumber - 1) * pageSize, pageSize);
+		
+		List<PublicationTerm> termList = clientService.listHistoryByPubList(getPubIdList(productId, subId, pubIds),
+				0, clientUser, false, (pageNumber - 1) * pageSize, pageSize);
+		
+		//List<PublicationTerm> result = new ArrayList<PublicationTerm>();
+		int end = (termList.size() > p * pageSize) ? p * pageSize : termList.size();
+		int begin = (termList.size() > (p - 1) * pageSize) ? (p - 1) * pageSize : termList.size();
+		List<PublicationTerm> result = termList.subList(begin, end);
+		
+		// 如果传来了本地列表，则进行差量返回
+		Map<Integer, Object> termIdMap = ParseUtil.parseIntKeyMap(
+				localListStr, ",");
+		if (termIdMap != null && termIdMap.size() > 0) {
+			List<PublicationTerm> temp = new ArrayList<PublicationTerm>();
+			for (PublicationTerm term : result) {
+				int termId = (int) term.getId();
+				if (!termIdMap.containsKey(termId)) {
+					temp.add(term);
+				}
+			}
+			result = temp;
+		}
+		
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(getHistoryTermXml(result));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			String xmlString = getHistoryTermXml(result);
+			RenderUtil.renderXml(response, xmlString);
+		}
+		return null;
+	}
+
+	/**
+	 * 获取适配ID
+	 * @param request
+	 * @return
+	 */
+	public int getSid(HttpServletRequest request) {
+		int sid = ParseUtil.paseInt(request.getParameter("sid"), 0);
+		if (sid == 0) {
+			if (request.getAttribute("infId") != null) {
+				logger.info("infId==" + request.getAttribute("infId"));
+				sid = (Integer) request.getAttribute("infId");
+			}
+			if (sid == 0) {
+				sid = new Integer(SysConfig.DEFAULT_ADAPT_ID);
+			}
+		}
+		return sid;
+	}
+
+	@RequestMapping(value = "/paper/coverFlow.go")
+	public String coverFlow(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(getCoverFlowXml());
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			String xmlString = getCoverFlowXml();
+			RenderUtil.renderXml(response, xmlString);
+		}
+		return null;
+	}
+
+	public String getHistoryTermXml(List<PublicationTerm> termList) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		for (int i = 0; i < termList.size(); i++) {
+			PublicationTerm term = termList.get(i);
+			Element paperElement = rootElement.addElement("paper");
+			Element element = paperElement.addElement("termId");
+			element.setText(String.valueOf(term.getId()));
+			element = paperElement.addElement("pubId");
+			element.setText(String.valueOf(term.getPublicId()));
+			element = paperElement.addElement("termName");
+			element.setText(term.getPubTermName());
+			Dom4jUtils.addElement(paperElement, "topNews", term.getTopNews());
+			Dom4jUtils.addElement(paperElement, "termTime", term.getPublishTimeStr());
+			Dom4jUtils.addElement(paperElement, "termLink",
+					SysConfig.API_SERVER.concat("paper/term.go?termId=") + term.getId());
+			Dom4jUtils.addElement(paperElement, "termZip", SysConfig.API_SERVER.concat("paper/termZip.go?termId=")
+					+ term.getId());
+		}
+		return doc.asXML();
+	}
+
+	public String getHistoryXml(List<PrePackUrl> termList) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		for (int i = 0; i < termList.size(); i++) {
+			PrePackUrl pt = termList.get(i);
+			Element paperElement = rootElement.addElement("paper");
+			Element element = paperElement.addElement("termId");
+			element.setText(String.valueOf(pt.getTermId()));
+			element = paperElement.addElement("pubId");
+			element.setText(String.valueOf(pt.getPubId()));
+			element = paperElement.addElement("termName");
+			element.setText(pt.getTerm().getPubTermName());
+			Dom4jUtils.addElement(paperElement, "topNews", pt.getTerm().getTopNews());
+			Dom4jUtils.addElement(paperElement, "termTime", pt.getTerm().getPublishTimeStr());
+			Dom4jUtils.addElement(paperElement, "termLink", pt.getUrl());
+			Dom4jUtils.addElement(paperElement, "termZip", pt.getTerm().getZipUrl(pt.getUrl()));
+		}
+		return doc.asXML();
+	}
+
+	/**
+	 * 获取刊物ID列表
+	 * @param productId  产品ID
+	 * @param subId  订阅ID
+	 * @param pubIds   客户端传入的刊物ID字符串
+	 * @return
+	 */
+	public List<Integer> getPubIdList(int productId, int subId, String pubIds) {
+		// 客户端传入的刊物ID列表
+		List<Integer> pubIdList = new ArrayList<Integer>();
+		String[] idArray = pubIds.split(",");
+		for (String id : idArray) {
+			if (NumberUtils.isNumber(id)) {
+				pubIdList.add(Integer.parseInt(id));
+			}
+		}
+		if (subId > 0) {
+			Subscription sub = subscriptionService.getSubscription(productId, subId);
+			if (sub != null && sub.getPubIdList() != null) {
+				// 将该订阅所包含的刊物ID列表合并到 客户端传入的刊物ID列表
+				for (Integer pubId : sub.getPubIdList()) {
+					if (!pubIdList.contains(pubId)) {
+						pubIdList.add(pubId);
+					}
+				}
+			}
+		}
+		return pubIdList;
+	}
+
+	public String getCoverFlowXml() {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		for (int i = 0; i < 2; i++) {
+			Element paperElement = rootElement.addElement("paper");
+			Element element = paperElement.addElement("pubId");
+			element.setText(String.valueOf(i + 1));
+			element = paperElement.addElement("pubName");
+			element.setText("搜狐早报");
+			element = paperElement.addElement("pubTitle");
+			element.setText("史上最大空乘招募开始");
+			element = paperElement.addElement("pubPic");
+			element.setText("http://221.179.173.174/mpaper/1/20110525/561_1_141_2/0605" + i + ".jpg");
+			element = paperElement.addElement("termLink");
+			element.setText("http://221.179.173.174/mpaper/1/20110525/561_1_141_2/mpaperhome_1_561_1.html");
+			element = paperElement.addElement("termZip");
+			element.setText("http://221.179.173.174/mpaper/1/20110525/561_1_141_2/561.zip");
+		}
+		return doc.asXML();
+	}
+
+}

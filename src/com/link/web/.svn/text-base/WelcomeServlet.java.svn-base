@@ -1,0 +1,252 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeMap;
+import java.util.Map.Entry;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+
+import com.wap.sohu.mobilepaper.conf.PubType;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.model.UserPubCity;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+import com.wap.sohu.mobilepaper.util.Tools;
+
+public class WelcomeServlet extends BaseServlet {
+
+	private static final long serialVersionUID = 7923419512068992341L;
+
+	public void doGet(HttpServletRequest request, HttpServletResponse response) {
+		setCommon(request, response);
+		ClientUser clientUser = getClientUser(request, response);
+
+		String htmlURL = "";
+			
+		if(clientUser==null){
+			clientUser = new ClientUser();
+			clientUser.setNew(true);
+			
+			try{
+				String p3 = request.getParameter("p3");
+				if(StringUtils.isNotEmpty(p3)){
+				    String param = new String(Base64.decodeBase64(URLDecoder.decode(p3, "utf-8").getBytes("utf-8")));
+					String params [] = param.split("&");
+					
+					try{
+						for(String para:params){
+							if(para.startsWith("f")){
+								clientUser.setPlatform(para.split("=")[1]);
+							}else if(para.startsWith("g")){
+								clientUser.setPlatformVersion(para.split("=")[1]);
+							}else if(para.startsWith("h")){
+								clientUser.setResolution(para.split("=")[1]);
+							}else if(para.startsWith("i")){
+								clientUser.setMachineId(para.split("=")[1]);
+							}
+						}
+					}catch(Exception e1){
+						
+					}
+					
+				}
+			}catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+			
+		//String productIds = (String)request.getAttribute("u");
+		String productIds = Tools.getReq(request, "u", "1"); // 不传默认给 早晚报的
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		
+		productIds = ( "0".equals(productIds) )?"1":productIds;
+		
+		int productId = 1;
+		try{
+			productId = Integer.parseInt(productIds);
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+		int platformId = 0 ;
+		int selfVersion = 0;
+		
+		
+		boolean isSelfAnalysis = false;
+		String selfAnalysisStr = Tools.getReq(request, "self", "");
+		if("1".equals(selfAnalysisStr) || clientUser.getProtocol(productId)==4 ){
+			isSelfAnalysis = true;
+			selfVersion = 21;
+			
+			platformId = clientUser.getPlatformId();
+		}
+		
+		
+		
+		String downIp = "http://"+PaperUtil.getDownloadIP()+"/mpaper/";
+		try {
+			List<Integer> userSubscribes =  null;
+			if (subId == 0) {
+				userSubscribes = clientService.getProductShowPubList( productId, 1);
+			} else {
+				userSubscribes = getPubIdList(productId, subId, "");
+			}
+			
+			List<PublicationTerm> userTerms = clientService.getLatestTerms(userSubscribes, clientUser, true, 0, 30);
+			
+			TreeMap<Long,PublicationTerm> tempMap = new TreeMap<Long,PublicationTerm>();
+			for(PublicationTerm publicationTerm : userTerms){
+				if( publicationTerm != null && publicationTerm.getPublishTime()!=null){
+					tempMap.put(publicationTerm.getPublishTime().getTime(), publicationTerm);
+				}
+			}
+			
+			List<PublicationTerm> userTermsNew = new ArrayList<PublicationTerm>();
+			Entry<Long,PublicationTerm> entry = tempMap.pollLastEntry();
+			while( entry  != null){
+				
+				userTermsNew.add(entry.getValue());
+				entry = tempMap.pollLastEntry();
+			}
+			
+			
+		
+			
+			for (PublicationTerm term : userTermsNew) {
+				
+				//System.out.println("jjjj ttest_inner== "+term.getPublicId()+" "+term.getId()+" "+term.getPublishTime());
+				
+				if(clientService.broadcast(term.getPublicId(),  clientUser )  && clientService.broadcastTerm(  clientUser ,  term) 
+						&& userSubscribes.contains(term.getPublicId())){
+					
+					//System.out.println("ttest_inner== "+term.getPublicId()+" "+term.getId()+" "+term.getPublishTime());
+					
+					Publication publication = clientService.getPublication(term
+							.getPublicId());
+					
+					if(publication==null){
+						System.out.println("zzzzzzz publication==null:"+term.getPublicId());
+						
+						continue;
+					}
+					
+					if(publication.getPubType() == PubType.msgPaper.getValue()){ // 立即体验联网打开不能是快讯
+						System.out.println("zzzzzzz publication.getPubType() == PubType.msgPaper.getValue():"+term.getPublicId());
+						continue;
+					}
+					
+					
+					int zipArea = publication.getZipArea();
+					int pubCityId = 0;
+					int displayWeather = publication.getDisplayWeather();
+					if(zipArea == 1 && clientUser != null) {
+						UserPubCity userPubCity = areaService.getUserPubCity(clientUser.getCid(), term.getPublicId());
+						if(userPubCity != null) {
+							pubCityId = userPubCity.getPubCityId();
+						}
+					}
+					
+					int getSidPubId = term.getPublicId();
+					if(publication.getViewPubId() > 0 ){
+						getSidPubId = publication.getViewPubId() ;
+					}
+					
+					int modelType = clientService.getModelTypeNew(clientUser);
+					if (clientUser.getMatchArea() == 0) {
+						clientUser.setMatchArea(74);
+					}
+					
+					int zipPolicy = publication.getZipPolicy();
+					
+					
+					if(clientUser.getPlatform()!=null && clientUser.getPlatform().toLowerCase().contains("iphone") ){
+						zipPolicy = 3;
+					}
+					
+					int weatherCode = 74; // 默认为74（北京地区）天气
+					if(displayWeather==1){
+						if( clientUser.getMatchArea()>0){
+							weatherCode = clientUser.getMatchArea();
+						}
+					}
+	
+					String url = PaperUtil.getHtmlUrl(downIp,term.getPublicId(),
+							term.getId(), term.getPublishTime(), modelType,
+							pubCityId,
+							"mpaperhome_1_" + term.getId() + "_1.html",zipPolicy,0,platformId,selfVersion,weatherCode);
+					
+					
+					//System.out.println("zzzzzzzurl:"+url);
+					
+					
+					if (!HttpUtil.openUrlCache(url)) {
+						
+//						System.out.println("welcome bad url:"+url);
+						
+						url = PaperUtil.getHtmlUrl(downIp,term.getPublicId(),
+								term.getId(), term.getPublishTime(), modelType,
+								pubCityId,
+								"mpaperhome_1_" + term.getId() + "_1.html",zipPolicy,0,platformId,selfVersion,74);
+						if(!HttpUtil.openUrlCache(url)){
+//							System.out.println("welcome bad url:"+url);
+							continue;
+						}
+			   				   
+					}
+					htmlURL = url;
+					break;
+				}
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		try {
+			if(htmlURL.contains(downIp)){
+				htmlURL = htmlURL.replace(downIp, SysConfig.PAGE_STATIC_URL_ROOT);
+			}
+			response.sendRedirect(htmlURL);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public List<Integer> getPubIdList(int productId, int subId, String pubIds) {
+		List<Integer> pubIdList = new ArrayList<Integer>();
+		String[] idArray = pubIds.split(",");
+		for (String id : idArray) {
+			if (NumberUtils.isNumber(id)) {
+				pubIdList.add(Integer.parseInt(id));
+			}
+		}
+		if (subId > 0) {
+			Subscription sub = subscriptionService.getSubscription(productId, subId);
+			if (sub != null && sub.getPubIdList() != null) {
+				for (Integer pubId : sub.getPubIdList()) {
+					if (!pubIdList.contains(pubId)) {
+						pubIdList.add(pubId);
+					}
+				}
+			}
+		}
+		return pubIdList;
+	}
+
+	@Override
+	public void doPost(HttpServletRequest request, HttpServletResponse response) {
+		doGet(request, response);
+	}
+
+}

@@ -1,0 +1,76 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-8 下午03:08:04
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.GoldRank;
+
+/**
+ * @author alex.lee at 2010-11-8 下午03:08:04
+ *
+ * desc： 
+ */
+@Repository("goldRankDao")
+public class GoldRankDao extends BaseJdbcSupport{
+	
+	public List<GoldRank> findAllGoldRank(){
+		String SQL = "select rank,country,jingpai,yingpai,tongpai from gold_rank order by jingpai  desc, yingpai  desc,tongpai  desc";
+		return this.getJdbcTemplate().query(SQL,new dataMapper());
+	}
+	
+	public boolean deleteAll(){
+		return this.getJdbcTemplate().update("delete from gold_rank")>0 ? true : false;
+	}
+	
+	public void savaGoldRank(List<GoldRank> golds){
+		for (final GoldRank goldRank : golds) {
+			final String ADD_SQL = "INSERT INTO gold_rank(country,rank,jingpai,yingpai,tongpai)values(?,?,?,?,?)";
+			this.getJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection.prepareStatement(ADD_SQL,
+							new String[] { "cid"});
+					ps.setString(1,goldRank.getCountry());
+					ps.setInt(2,goldRank.getRank());
+					ps.setInt(3,goldRank.getJingpai());
+					ps.setInt(4,goldRank.getYingpai());
+					ps.setInt(5,goldRank.getTongpai());
+					return ps;
+				}
+			});
+		}
+	}
+	
+	
+	private class dataMapper implements RowMapper<GoldRank> {
+		public GoldRank mapRow(ResultSet rs, int rowNum) throws SQLException {
+			GoldRank goldRank = new GoldRank();
+			goldRank.setRank(rs.getInt("rank"));
+			goldRank.setCountry(rs.getString("country"));
+			goldRank.setJingpai(rs.getInt("jingpai"));
+			goldRank.setYingpai(rs.getInt("yingpai"));
+			goldRank.setTongpai(rs.getInt("tongpai"));
+			return goldRank;
+		}
+	}
+	
+	
+	
+}

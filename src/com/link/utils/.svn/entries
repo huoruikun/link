@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="15810"
+   name=""
+   committed-date="2012-03-29T09:23:18.625169Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com/wap/sohu/mobilepaper/util"
+   last-author="wangjia"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   committed-rev="3676"
+   name="SystemInfo.java"
+   text-time="2012-03-23T02:26:17.429062Z"
+   committed-date="2011-02-23T06:59:11.017743Z"
+   checksum="a2cfda6f1a38a82dbfb124764ffe8f32"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.194801Z"/>
+<entry
+   committed-rev="13344"
+   name="LRUMap.java"
+   text-time="2012-03-23T02:26:17.444680Z"
+   committed-date="2012-01-12T02:34:52.060624Z"
+   checksum="76ac566d176084343eee29b89da892c0"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.194801Z"/>
+<entry
+   committed-rev="15810"
+   name="NewsJsonUtil.java"
+   text-time="2012-03-30T03:26:06.241126Z"
+   committed-date="2012-03-29T09:23:18.625169Z"
+   checksum="55d74eae04159b577d2eaa324c695611"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-30T03:26:06.225501Z"/>
+<entry
+   committed-rev="3064"
+   name="SpringContainer.java"
+   text-time="2012-03-23T02:26:17.460297Z"
+   committed-date="2010-12-10T07:47:49.589134Z"
+   checksum="490bbb1f556780bb566899172b258386"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.210419Z"/>
+<entry
+   committed-rev="13066"
+   name="JSonUtil.java"
+   text-time="2012-03-23T02:26:17.460297Z"
+   committed-date="2012-01-04T05:33:35.568892Z"
+   checksum="dcc05c2e341f2830a2859e2f7cbd5488"
+   last-author="hanliujie"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.210419Z"/>
+<entry
+   committed-rev="15376"
+   name="ParseUtil.java"
+   text-time="2012-03-23T02:26:17.475914Z"
+   committed-date="2012-03-22T02:33:54.935789Z"
+   checksum="6e6a59d99c6ceaa629f7e9bb681dda81"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.226036Z"/>
+<entry
+   committed-rev="13190"
+   name="CommonUtils.java"
+   text-time="2012-03-23T02:26:17.475914Z"
+   committed-date="2012-01-10T01:34:55.668576Z"
+   checksum="856fd8d62ea580636e5af0e1a1fd1cb3"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.226036Z"/>
+<entry
+   committed-rev="6348"
+   name="MyStringUtil.java"
+   text-time="2012-03-23T02:26:17.491532Z"
+   committed-date="2011-06-18T10:37:28.119356Z"
+   checksum="b1fa8543b9168cba452a678df4da4aed"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.226036Z"/>
+<entry
+   committed-rev="4186"
+   name="SoftUpdateUtil.java"
+   text-time="2012-03-23T02:26:17.491532Z"
+   committed-date="2011-03-25T06:34:14.017841Z"
+   checksum="4c77b616c9591863e8b0fba9c3143802"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.241653Z"/>
+<entry
+   committed-rev="13044"
+   name="RollbackHtmlUtil.java"
+   text-time="2012-03-23T02:26:17.507149Z"
+   committed-date="2011-12-31T02:17:14.100604Z"
+   checksum="829725b9e2969d8e21b77b623db9f74a"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.241653Z"/>
+<entry
+   committed-rev="15119"
+   name="HttpUtil.java"
+   text-time="2012-03-23T02:26:17.507149Z"
+   committed-date="2012-03-17T07:13:50.066224Z"
+   checksum="a1ceee300185546c17dd9e35255a963b"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.257271Z"/>
+<entry
+   committed-rev="6360"
+   name="Test.java"
+   text-time="2012-03-23T02:26:17.522767Z"
+   committed-date="2011-06-20T07:20:47.288635Z"
+   checksum="02684211629d87d4d0b06f8f1255b8c2"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.257271Z"/>
+<entry
+   committed-rev="14985"
+   name="HeaderDataUtil.java"
+   text-time="2012-03-23T02:26:17.522767Z"
+   committed-date="2012-03-14T07:32:40.566066Z"
+   checksum="12eadedbc569633ba8939109af69f042"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.272888Z"/>
+<entry
+   committed-rev="9575"
+   name="WeatherUtils.java"
+   text-time="2012-03-23T02:26:17.538384Z"
+   committed-date="2011-08-30T06:37:28.687335Z"
+   checksum="88d7571563659af61dc02950e058a240"
+   last-author="jiangtao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.272888Z"/>
+<entry
+   committed-rev="15384"
+   name="ArticleUtil.java"
+   text-time="2012-03-23T02:26:17.538384Z"
+   committed-date="2012-03-22T03:22:26.838543Z"
+   checksum="2152a761f9c612d87302adc1637e1ca6"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.288506Z"/>
+<entry
+   committed-rev="9141"
+   name="XmlUtils.java"
+   text-time="2012-03-23T02:26:17.554001Z"
+   committed-date="2011-08-19T06:47:16.272942Z"
+   checksum="d091f38582572a2929e098d871dfb861"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.288506Z"/>
+<entry
+   committed-rev="2779"
+   name="GoldRankTools.java"
+   text-time="2012-03-23T02:26:17.554001Z"
+   committed-date="2010-11-15T06:09:23.718035Z"
+   checksum="f95b1a75a6cf727bb665c678fd646092"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.288506Z"/>
+<entry
+   committed-rev="13826"
+   name="Md5Util.java"
+   text-time="2012-03-23T02:26:17.554001Z"
+   committed-date="2012-02-09T03:16:05.836659Z"
+   checksum="2d33591fd01742f5aa8d25dea3a3abc0"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.304123Z"/>
+<entry
+   committed-rev="3039"
+   name="PaperUtil.1java"
+   text-time="2012-03-23T02:26:17.569619Z"
+   committed-date="2010-12-09T02:31:04.612219Z"
+   checksum="6ef89e00b4b86e330a11cb384bb1ccb3"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.304123Z"/>
+<entry
+   committed-rev="15716"
+   name="NewsXmlUtil.java"
+   text-time="2012-03-29T02:54:32.393629Z"
+   committed-date="2012-03-28T07:53:46.021004Z"
+   checksum="e3e9e00a57ff8cdc83aaa5afe20efbb2"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-29T02:54:32.346785Z"/>
+<entry
+   committed-rev="504"
+   name="ConsistentHash.java"
+   text-time="2012-03-23T02:26:17.585236Z"
+   committed-date="2010-05-12T07:03:16.411673Z"
+   checksum="50a0ef2b1a05969d88dd6c9689d907f6"
+   last-author="jtong"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.319740Z"/>
+<entry
+   committed-rev="12626"
+   name="Dom4jUtils.java"
+   text-time="2012-03-23T02:26:17.585236Z"
+   committed-date="2011-12-22T02:13:39.921223Z"
+   checksum="857f31c17b32991d18fe582afc12ebfd"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.319740Z"/>
+<entry
+   committed-rev="4069"
+   name="Tools.java"
+   text-time="2012-03-23T02:26:17.600854Z"
+   committed-date="2011-03-20T06:39:37.669949Z"
+   checksum="ead2b6c37ce49c8e458a8fc717a03c92"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.335358Z"/>
+<entry
+   committed-rev="4322"
+   name="CmdUtil.java"
+   text-time="2012-03-23T02:26:17.600854Z"
+   committed-date="2011-04-07T06:36:03.451542Z"
+   checksum="25bb8cbe16e8878ea55917e82909c47a"
+   last-author="wangchunxian"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.335358Z"/>
+<entry
+   committed-rev="10242"
+   name="ResolutionUtil.java"
+   text-time="2012-03-23T02:26:17.616471Z"
+   committed-date="2011-09-21T10:14:05.501246Z"
+   checksum="9a0cc1b25eaf4be09e847bca015b8316"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.335358Z"/>
+<entry
+   committed-rev="9674"
+   name="ImageUtils.java"
+   text-time="2012-03-23T02:26:17.616471Z"
+   committed-date="2011-09-01T05:41:34.626919Z"
+   checksum="c50e6454bc2a517505ca17569787c110"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.350975Z"/>
+<entry
+   committed-rev="14680"
+   name="StringUtil.java"
+   text-time="2012-03-23T02:26:17.616471Z"
+   committed-date="2012-03-07T13:27:29.008134Z"
+   checksum="26e8ade5960a8e008ea004eb75ecf2ff"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.350975Z"/>
+<entry
+   committed-rev="13344"
+   name="PaperUtil.java"
+   text-time="2012-04-10T02:56:44.721128Z"
+   committed-date="2012-01-12T02:34:52.060624Z"
+   checksum="082253cb78a9b9a70368cc1e98ee23ba"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.366593Z"/>
+<entry
+   committed-rev="2221"
+   name="Location.java"
+   text-time="2012-03-23T02:26:17.725793Z"
+   committed-date="2010-08-27T06:46:08.114889Z"
+   checksum="9b208e56aaaa759ebbe9ed86c1515679"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.366593Z"/>
+<entry
+   committed-rev="12592"
+   name="ElementUtils.java"
+   text-time="2012-03-23T02:26:17.788262Z"
+   committed-date="2011-12-21T03:20:38.187806Z"
+   checksum="5612b7b2599e18fbf3a0d14bad8966ae"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.366593Z"/>
+<entry
+   committed-rev="10493"
+   name="PageUtil.java"
+   text-time="2012-03-23T02:26:17.803880Z"
+   committed-date="2011-09-29T09:50:03.374483Z"
+   checksum="34e9f9bb95acbe6782670ab13e5ff338"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.382210Z"/>
+<entry
+   committed-rev="15772"
+   name="DateUtil.java"
+   text-time="2012-03-28T07:26:48.103292Z"
+   committed-date="2012-03-29T03:00:39.462160Z"
+   checksum="a0efcd17b0db6ec438e1de27816f93f9"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.382210Z"/>
+<entry
+   committed-rev="15376"
+   name="ToolsAesCrypt.java"
+   text-time="2012-04-10T02:05:13.129494Z"
+   committed-date="2012-03-22T02:33:54.935789Z"
+   checksum="f39d26673c020defed5e55d55855cf4c"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.382210Z"/>
+<entry
+   committed-rev="14462"
+   name="ClientUtil.java"
+   text-time="2012-03-23T02:26:17.866349Z"
+   committed-date="2012-03-02T03:55:51.982311Z"
+   checksum="de23f39ce191da09dc8c42c9b96c8a23"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.397827Z"/>
+<entry
+   committed-rev="2983"
+   name="TestPacking.java"
+   text-time="2012-03-23T02:26:17.866349Z"
+   committed-date="2010-12-06T03:52:43.972269Z"
+   checksum="8ed6c4279d8d81cc8c0f19fce05baae6"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.397827Z"/>
+<entry
+   committed-rev="15703"
+   name="RenderUtil.java"
+   text-time="2012-03-28T06:15:28.397993Z"
+   committed-date="2012-03-28T04:06:55.888839Z"
+   checksum="1c80ccef213ae9c8eee65310abfac3b0"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-28T06:15:28.241952Z"/>
+<entry
+   committed-rev="3752"
+   name="EntityChange.java"
+   text-time="2012-03-23T02:26:17.881967Z"
+   committed-date="2011-03-01T12:12:16.672175Z"
+   checksum="c76ac36fa75ee199c84cb69e85d9ed83"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.413445Z"/>
+<entry
+   committed-rev="14660"
+   name="ToolsAesCbcCrypt.java"
+   text-time="2012-03-23T02:26:17.913202Z"
+   committed-date="2012-03-07T08:44:05.408904Z"
+   checksum="224ca19e153f3efc7f28ef889696efd3"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.413445Z"/>
+<entry
+   committed-rev="14645"
+   name="UpgradeUtil.java"
+   text-time="2012-03-23T02:26:17.913202Z"
+   committed-date="2012-03-07T08:11:12.034956Z"
+   checksum="bb22a340067e4399da2036debdb1b322"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.429062Z"/>
+<entry
+   committed-rev="2222"
+   name="MobileLocationUtil.java"
+   text-time="2012-03-23T02:26:17.928819Z"
+   committed-date="2010-08-27T06:46:34.600404Z"
+   checksum="087a53464cc98903f86786eb2da6d62a"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.429062Z"/>
+</wc-entries>

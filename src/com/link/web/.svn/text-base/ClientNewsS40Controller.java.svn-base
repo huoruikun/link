@@ -1,0 +1,203 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.apache.tools.ant.util.DateUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.IPublicationService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.ArticleUtil;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.ElementUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.MyStringUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientNewsS40Controller {
+	private static final Logger logger = Logger.getLogger(ClientNewsS40Controller.class);
+
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+
+	@Autowired
+	protected IClientService clientService;
+
+	@Autowired
+	protected INewsService newsService;
+	
+	@Autowired
+	protected IPublicationService publicationService;
+	
+	
+
+	@RequestMapping(value = "/s40/news/listxml.go")
+	public String listXml(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int page = HttpUtil.getRequestInt(request, "page", 1);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int startId = HttpUtil.getRequestInt(request, "startId", 0);
+		int pageSize = HttpUtil.getRequestInt(request, "num", 7);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		Subscription subscribe = subscriptionService.getSubscription(1, subId);
+		List<Integer> pubIdList = subscriptionService.getPubIdListBySubId(subId, pubId);
+		String pubIds = MyStringUtil.integerListToString(pubIdList);
+		List<PublicationTerm> terms = clientService.getLatestTerms(pubIdList, null, true, 0, 30);
+		if(termId>0){
+			terms.add(publicationService.findPublicationTerm(termId));
+		}
+		if (terms == null || terms.size() == 0) {
+			RenderUtil.renderXml(response, ClientUtil.getReturnXml("404", "没有新闻"));
+		} else {
+			PublicationTerm term = terms.get(0);
+			int newsType = 3;
+			//Long.valueOf(term.getId()).intValue() 
+			/*Long newsCount = newsService.searchNewsCount(pubIds, pageId,0 , fetchRuleId, startId, newsType);*/
+			/*long totalPage = newsCount % pageSize == 0 ? newsCount / pageSize : newsCount / pageSize + 1;*/
+			List<NewsContent> newsList = newsService.searchNewsContent(pubIds, pageId, termId, fetchRuleId, startId, page,
+					pageSize, newsType);
+			if (newsList == null || newsList.size() == 0) {
+				RenderUtil.renderXml(response, ClientUtil.getReturnXml("404", "没有新闻"));
+			} else {
+			//	String xmlString = getNewsListXmlS40(subscribe, term, totalPage, newsList);
+				String xmlString = getNewsListXmlS40(subscribe, term, newsList);
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/s40/subscribe/list.go")
+	public String listSubscribes(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element subListElement = rootElement.addElement("subList");
+		int u = HttpUtil.getRequestInt(request, "u", 1);
+		int[] subIds = {107, 89, 143, 145, 187};
+		if(u==3405){ //u==3405 搜狐焦点
+			subIds = new int[4]  ;
+			subIds[0]=197;    
+		//	subIds[1]=203;    
+		//	subIds[2]=204;  
+			
+			subIds[1]=107;    
+			subIds[2]=143 ;   
+			subIds[3]=145 ;  
+		}
+		for (int subId : subIds) {
+			Subscription subscribe = subscriptionService.getSubscription(u,subId);
+			if(subscribe!=null){
+				Element subElement = subListElement.addElement("sub");
+				Dom4jUtils.addElement(subElement, "subId", String.valueOf(subscribe.getId()));
+				Dom4jUtils.addElement(subElement, "subName", subscribe.getName());
+				Dom4jUtils.addElement(subElement, "subInfo", subscribe.getDescription());
+				Dom4jUtils.addElement(subElement, "subIcon", subscribe.getIconPath());
+				Dom4jUtils.addElement(subElement, "termLink", "http://api.k.sohu.com/api/s40/news/listxml.go?page=1&subId=" + subscribe.getId());
+			}
+		}
+		
+		RenderUtil.renderXml(response, doc.asXML());
+		
+		return null;
+	}
+
+	public String getNewsListXmlS40(Subscription subscribe,
+			PublicationTerm term, List<NewsContent> newsList) {
+		ArticleUtil articleUtil = new ArticleUtil();
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		if(subscribe!=null){
+			Dom4jUtils.addCDATAElement(rootElement, "subName", subscribe.getName());
+		}
+		if(term!=null){
+			Dom4jUtils.addElement(rootElement, "termId", String.valueOf(term.getId()));
+			Dom4jUtils.addCDATAElement(rootElement, "termName", term.getPubTermName());
+		}
+/*		Dom4jUtils.addElement(rootElement, "totalPage", String.valueOf(totalPage));*/
+		
+		Element newsListElement = rootElement.addElement("newsList");
+		for (NewsContent content : newsList) {
+			Element newsElement = newsListElement.addElement("news");
+
+			Dom4jUtils.addElement(newsElement, "newsId", String.valueOf(content.getId()));
+
+			if (content.getNewsType() == NewsContent.PICGROUP) {
+				Dom4jUtils.addElement(newsElement, "type", "2");
+			} else if (content.getNewsType() == NewsContent.LINKED
+					&& StringUtils.isNotBlank(content.getNews().getLinkUrl())) {
+				Dom4jUtils.addElement(newsElement, "type", "3");
+			} else {
+				Dom4jUtils.addElement(newsElement, "type", "1");
+			}
+
+			Dom4jUtils.addCDATAElement(newsElement, "title", content.getTitle());
+
+			if (content.getNews().getContentPic() != null) {
+				if (content.getNews().getContentPic().size() > 0) {
+					for (int i = 0; i < content.getNews().getContentPic().size(); i++) {
+						Image image = content.getNews().getContentPic().get(i);
+						if (NumberUtils.toInt(image.getSize(), 5000) > 10000) { // 图片大于10k才显示
+							ElementUtils.addElement(newsElement, "image",
+									articleUtil.getSquareImageUrlBySize(image.getUrl(), "1"));
+							break;
+						}
+					}
+				}
+			}
+
+			String newsAbstract = content.getNews().getAbstract();
+			newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+			if (StringUtils.isBlank(newsAbstract)) {
+				newsAbstract = content.getNews().getContent();
+			}
+			if (StringUtils.isNotBlank(newsAbstract)) {
+				newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+				newsAbstract = ClientUtil.formatAbstractXmlToTxt(newsAbstract);
+				int end = (newsAbstract.length() > 80) ? 78 : newsAbstract.length() - 2;
+				end = (end < 0) ? 0 : end;
+				String subContent = newsAbstract.substring(0, end);
+				if (StringUtils.isNotBlank(subContent)) {
+					Dom4jUtils.addCDATAElement(newsElement, "description", subContent);
+				}
+			}
+
+			if (content.getNewsType() == NewsContent.LINKED && StringUtils.isNotBlank(content.getNews().getLinkUrl())) {
+				Dom4jUtils.addCDATAElement(newsElement, "link", content.getNews().getLinkUrl());
+			} else if (content.getNews() != null && StringUtils.isNotBlank(content.getNews().getReferUrl())) {
+				Dom4jUtils.addCDATAElement(newsElement, "link", content.getNews().getReferUrl());
+			}
+
+			if (StringUtils.isNotBlank(content.getNews().getNtime())) {
+				Dom4jUtils.addElement(newsElement, "time", content.getNews().getNtime());
+			} else if (content.getUpdateTime() != null) {
+				Dom4jUtils.addElement(newsElement, "time",
+						DateUtils.format(content.getUpdateTime(), "yyyy-MM-dd HH:mm:ss"));
+			}
+		}
+		return doc.asXML();
+	}
+}

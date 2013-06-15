@@ -1,0 +1,40 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ActivitiesUser;
+
+@Repository("activitiesUserDao")
+public class ActivitiesUserDao extends BaseJdbcSupport {
+
+	private SimpleJdbcInsert insertActor = null;
+
+	@PostConstruct
+	public void init() {
+		insertActor = new SimpleJdbcInsert(getJdbcTemplate().getDataSource())
+				.withTableName("c_activities_user").usingGeneratedKeyColumns("id");
+	}
+
+	@Override
+	public JdbcTemplate getJdbcTemplate() {
+		return super.interfaceJdbcTemplate;
+
+	}
+
+	public boolean add(ActivitiesUser activitiesUser) {
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(
+				activitiesUser);
+		Number num = insertActor.executeAndReturnKey(parameters);
+		if (num != null && num.intValue() > 0) {
+			return true;
+		}
+		return false;
+	}
+
+}

@@ -1,0 +1,95 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PubPageSubscribe;
+
+@Repository("pubPageSubscribeDao")
+public class PubPageSubscribeDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor;
+	
+	@PostConstruct
+	public void init() {
+		this.insertActor = new SimpleJdbcInsert(this.getInterfaceJdbcTemplate()
+				.getDataSource()).withTableName("c_pub_page_subscribe")
+				.usingGeneratedKeyColumns("id");
+	}
+	
+	public List<PubPageSubscribe> list(long cid, int pubId){
+		String sql = "select * from c_pub_page_subscribe where cid=? and pubId=? order by position";
+		return getInterfaceJdbcTemplate().query(sql, new Object[]{cid, pubId}, new dataMapper());
+	}
+	
+	public boolean add(PubPageSubscribe pubPageSubscribe){
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(pubPageSubscribe);		
+		Number num = insertActor.executeAndReturnKey(parameters);
+		if(num != null && num.intValue() > 0){
+			return true;
+		}
+		return false;
+	}
+	
+	public void delete(long cid, int pubId, int pageId){
+		String sql = "delete from c_pub_page_subscribe where cid=? and pubId=? and pageId=?";
+		getInterfaceJdbcTemplate().update(sql, new Object[]{cid, pubId, pageId});
+	}
+	
+	public void deletePubPage(long cid, int pubId){
+		String sql = "delete from c_pub_page_subscribe where cid=? and pubId=?";
+		getInterfaceJdbcTemplate().update(sql, new Object[]{cid, pubId});
+	}
+	
+	public boolean saveSequence(final long cid, final int pubId, final int[] pageIds){
+		
+		String sql = "update c_pub_page_subscribe set position=? where cid=? and pubId=? and pageId=?";
+		
+		getInterfaceJdbcTemplate().batchUpdate(sql, new BatchPreparedStatementSetter(){
+
+			@Override
+			public int getBatchSize() {
+				return pageIds.length;
+			}
+
+			@Override
+			public void setValues(PreparedStatement st, int arg1)
+					throws SQLException {
+				st.setInt(1, arg1);
+				st.setLong(2, cid);
+				st.setInt(3, pubId);
+				st.setInt(4, pageIds[arg1]);
+			}
+			
+		});
+		
+		return true;
+	}
+	
+	class dataMapper implements RowMapper<PubPageSubscribe> {
+
+		@Override
+		public PubPageSubscribe mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			PubPageSubscribe x_ret = new PubPageSubscribe();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setCid(rs.getLong("cid"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			x_ret.setPageId(rs.getInt("pageId"));
+			x_ret.setPosition(rs.getInt("position"));
+			return x_ret;
+		}
+		
+	}
+}

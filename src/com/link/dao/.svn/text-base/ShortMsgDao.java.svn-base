@@ -1,0 +1,45 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.sohu.wap.sso.util.DateUtil;
+import com.wap.sohu.mobilepaper.model.ShortMsg;
+
+@Repository("shortMsgDao")
+public class ShortMsgDao extends BaseJdbcSupport {
+
+	public List<ShortMsg> listProductShortMessage(Integer productId) {
+		return getInterfaceJdbcTemplate().query("select * from c_short_msg where productId = " + productId, new dataMapper());
+	}
+
+	public List<ShortMsg> listShortMessage(Integer productId, Date date) {
+		return getInterfaceJdbcTemplate().query(
+				"select * from c_short_msg m where m.isSend =1 and  m.productId = " + productId + " and date(m.createTime)  = date('"
+						+ DateUtil.getDate(date, "yyyy-MM-dd") + "')", new dataMapper());
+	}
+
+	private static final class dataMapper implements RowMapper<ShortMsg> {
+		public ShortMsg mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ShortMsg msg = new ShortMsg();
+			msg.setId(rs.getInt("id"));
+			msg.setProductId(rs.getInt("productId"));
+			msg.setType(rs.getInt("type"));
+			msg.setSenderName(rs.getString("senderName"));
+			msg.setTitle(rs.getString("title"));
+			msg.setContent(rs.getString("content"));
+			msg.setCreateTime(rs.getDate("createTime"));
+			msg.setCreateUser(rs.getString("createUser"));
+
+			msg.setSendTime(rs.getDate("sendTime"));
+			msg.setIsSend(rs.getInt("isSend"));
+
+			return msg;
+		}
+	}
+}

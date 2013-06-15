@@ -1,0 +1,46 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PubCity;
+
+@Repository("pubCityDao")
+public class PubCityDao  extends BaseJdbcSupport {
+
+	public List<PubCity> findList(int pubId){
+		String sql = "select * from p_pub_city where pubId=?";
+		return getJdbcTemplate().query(
+				sql, new Object[]{pubId}, new dataMapper());
+	}
+	
+	public PubCity getDefaultCity(int pubId) {
+		String sql = "select * from p_pub_city where pubId=? and isDefault=1";
+		List<PubCity> list = getJdbcTemplate().query(
+				sql, new Object[]{pubId}, new dataMapper());
+		if(list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	class dataMapper implements RowMapper<PubCity> {
+
+		@Override
+		public PubCity mapRow(ResultSet rs, int arg1) throws SQLException {
+			PubCity city = new PubCity();
+			city.setId(rs.getInt("id"));
+			city.setPubId(rs.getInt("pubId"));
+			city.setPrivince(rs.getString("privince"));
+			city.setName(rs.getString("name"));
+			city.setIsDefault(rs.getInt("isDefault"));
+			city.setIsDelete(rs.getInt("isDelete"));
+			return city;
+		}
+		
+	}
+}

@@ -1,0 +1,120 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.service.ISoftUpdateService;
+
+public class UpgradeUtil {
+
+	private static LRUMap<String,String> map = new LRUMap<String,String>("upgrade url", 10, 300);
+	
+	private static ISoftUpdateService softUpdateService;
+	
+	
+//	public static String getUpgrade(ClientUser clientUser) {
+//		String v="";
+//		if(clientUser.getProtocol()==2){
+//			v="&v=2";
+//		}
+//		
+//		String imei = "";
+//		if(clientUser.getIMEI()!=null){
+//			imei = "&imei="+clientUser.getIMEI();
+//		}
+//		String url = SysConfig.KEY_UPGRADE_URL_NEW + "platform="
+//		+ clientUser.getPlatform() + "&platformVersion="
+//		+ clientUser.getPlatformVersion() + "&version="
+//		+ clientUser.getVersion()+v+imei;
+//		String urlkey = Md5Util.MD5Encode(url);
+//		String updateMessage = map.get(urlkey);
+//		if(updateMessage==null){
+//			updateMessage = HttpUtil.getUrlContent(url);
+//			if(updateMessage!=null){
+//				updateMessage = updateMessage.replaceAll("\n", "");
+//				updateMessage = updateMessage.replaceAll("\r", "");
+//				updateMessage = updateMessage.replaceAll("\t", "");
+//				updateMessage = updateMessage.replaceAll(" ", "");
+//				map.put(urlkey, updateMessage);
+//			}
+//		}
+//		
+//		return updateMessage;
+//	}
+	
+	public static String checkUpgrade(ClientUser clientUser,boolean isFromUpgrade, ClientInstall clientInstall){
+		if(softUpdateService==null)
+			softUpdateService = (ISoftUpdateService)SpringContainer.getBean("softUpdateService");
+		
+		String upgrade = null;
+		
+		Map<String,String> param =  new HashMap<String,String>();
+		String platform = clientUser.getPlatform();
+		if(platform != null && platform.toLowerCase().contains("iphone")) {
+			platform = "iphone";
+		}
+		param.put("platform", platform);
+		param.put("platformVersion", clientUser.getPlatformVersion());
+		
+		int productId = clientInstall.getProductId();
+		if(productId <= 0){
+			productId = 1;//默认值
+		}
+		param.put("productId", String.valueOf(productId));
+		param.put("version", clientInstall.getVersion());
+		param.put("channelId", String.valueOf(clientInstall.getChannelId()));
+		
+//		param.put("version", clientUser.getVersion());
+//		param.put("channelId", clientUser.getChannelId());
+		param.put("machineId", clientUser.getMachineId());
+		
+		if(clientUser.getProtocol()==2){
+			param.put("v", 2+"");
+		}
+		if(clientUser.getIMEI()!=null){
+			param.put("imei", clientUser.getIMEI());
+		}
+		
+		String updateMessage = softUpdateService.updateXml(param);
+		//String updateMessage = getUpgrade(clientUser);
+		if (updateMessage != null && updateMessage.length() > 0 && clientUser.getProtocol() !=2) {
+			if(isFromUpgrade) //如果是新升级接口(u.do),过来的直接返回xml
+				return updateMessage;
+			
+			Pattern upgradePattern = Pattern
+					.compile("<f>(.+)</f>");
+			Matcher matcher = upgradePattern.matcher(updateMessage);
+			if (matcher.find()) {
+				upgrade =matcher.group(1);
+//				System.out.println("===========param=============="+param);
+//				System.out.println(DateUtil.getDate("")+"=========== 有新升级信息 v2=================!!!!");
+//				PaperUtil.sendMsgAlert("有新升级信息v2","有新升级信息");//加入出错机制处理
+			}
+			updateMessage = upgrade;
+		}else if(StringUtils.isNotEmpty(updateMessage) && updateMessage.indexOf("<upgrade>101</upgrade>") >=0 && clientUser.getProtocol() ==2){
+//			System.out.println("===========param=============="+param);
+//			System.out.println(DateUtil.getDate("")+"=========== 有新升级信息 v3=================!!!!");
+//			PaperUtil.sendMsgAlert("有新升级信息v3","有新升级信息");//加入出错机制处理
+		}
+		return updateMessage;
+	}
+	
+	public static float getVersionFloat (String version){
+		float f_version = ParseUtil.parseFloat(version, 0);	
+		if((int)f_version==0){
+			String[] vArray = StringUtils.split(version,".");
+			if(vArray.length>=3){
+				String t = vArray[0]+"."+vArray[1]+vArray[2];
+				f_version = ParseUtil.parseFloat(t,0);	
+			} 
+		}
+		return f_version;
+	}
+}
+

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="15782"
+   name=""
+   committed-date="2012-03-29T03:54:49.136955Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com/wap/sohu/mobilepaper/conf"
+   last-author="zhujianbo"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   committed-rev="15782"
+   name="SysConfig.java"
+   text-time="2012-03-30T03:26:06.569247Z"
+   committed-date="2012-03-29T03:54:49.136955Z"
+   checksum="e00b589217390a402dc4d467a0585321"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-30T03:26:06.553622Z"/>
+<entry
+   committed-rev="504"
+   name="PubType.java"
+   text-time="2012-03-23T02:26:16.585723Z"
+   committed-date="2010-05-12T07:03:16.411673Z"
+   checksum="fa4c6e08fe95bc292fffe39b21091ea1"
+   last-author="jtong"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.570105Z"/>
+<entry
+   committed-rev="11850"
+   name="Properties.java"
+   text-time="2012-03-23T02:26:16.601340Z"
+   committed-date="2011-12-01T08:28:59.507522Z"
+   checksum="c07002efffdb16e0a8babfec08c63da0"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.570105Z"/>
+<entry
+   committed-rev="14477"
+   name="SMSContent.java"
+   text-time="2012-03-23T02:26:16.601340Z"
+   committed-date="2012-03-02T09:54:37.416488Z"
+   checksum="ab891bdac0f000b06a7be4f2957c8b09"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.570105Z"/>
+<entry
+   committed-rev="12000"
+   name="ScookieType.java"
+   text-time="2012-03-23T02:26:16.616957Z"
+   committed-date="2011-12-06T07:55:32.110561Z"
+   checksum="9265a2711ee3e930ccbc92e5e1876bbf"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.585723Z"/>
+</wc-entries>

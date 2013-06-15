@@ -1,0 +1,33 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ChannelPackage;
+
+@Repository("packageDao")
+public class ChannelPackageDao extends BaseJdbcSupport {
+
+	public List<ChannelPackage> list(int channel_serialNum){
+		String sql = "select * from o_channel_package where channel_serialNum=?";
+		return getInterfaceJdbcTemplate().query(sql, new Object[]{channel_serialNum}, new dataMapper());
+	}
+	
+	class dataMapper implements RowMapper<ChannelPackage> {
+
+		@Override
+		public ChannelPackage mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			ChannelPackage x_ret = new ChannelPackage();
+			x_ret.setChannel_serialNum(rs.getInt("channel_serialNum"));
+			x_ret.setPlatform_id(rs.getInt("platform_id"));
+			x_ret.setDown_url(rs.getString("down_url"));
+			return x_ret;
+		}
+		
+	}
+}

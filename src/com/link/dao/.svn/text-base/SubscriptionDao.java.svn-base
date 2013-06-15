@@ -1,0 +1,236 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.lang.StringUtils;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.util.MyStringUtil;
+
+@Repository("subscriptionDao")
+public class SubscriptionDao extends BaseJdbcSupport {
+
+	public List<Integer> getSubIdListByPubId(int pubId) {
+		String sql = "SELECT subscriptionId FROM `p_subscription_publication` where pubid = " + pubId ;
+		List<Integer> list = this.getJdbcTemplate().queryForList(sql, Integer.class); 
+		return list;
+	}
+
+	/**
+	 * 以后需要完善   
+	 * 注：用户订阅改版之后  该方法已废弃
+	 * @param productId
+	 * @return
+	 */
+	public List<Subscription> listValidSubscription(int productId) {
+		if (productId != 1) {
+			productId = 1;
+		}
+		StringBuffer buffer = new StringBuffer("  select i.* ,t.name as typeName ");
+		buffer.append(" from p_subscription_info i ,p_subscription_type t ");
+		buffer.append(" where  i.typeid = t.id and t.isValid = 1 and i.isValid = 1 and i.productId= ");
+		buffer.append(productId);
+		buffer.append(" order by t.position,i.position,i.id ");
+		List<Subscription> list = this.getJdbcTemplate().query(buffer.toString(), new SubscriptionMapper());
+		List<Subscription> result = new ArrayList<Subscription>();
+		for (Subscription sub : list) {
+		//	System.out.println("sub name="+sub.getName());
+			List<Integer> idList = getPubIdListBySubId(sub.getId());
+			String pubIdString = MyStringUtil.integerListToString(idList);
+			if (StringUtils.isNotBlank(pubIdString)) {
+				sub.setPubIdString(pubIdString);
+				result.add(sub);
+			}
+		}
+		return result;
+	}
+	
+	//add by wlq	
+	public Set<Integer>  listDefaultSubIdLSet(int productId)
+	{
+		Set<Integer> set =new HashSet<Integer>();
+		 
+		List<Integer> idList = this.getJdbcTemplate().queryForList(
+				"select r.subId from p_subscription_type_relation r,p_subscription_type t " +
+				"where r.typeId=t.id and r.isDefault=1 and r.isValid=1 and t.productId=?",					
+				new Object[] { productId }, Integer.class);			 
+		if (idList != null) {
+			for (Integer subId : idList) {
+				set.add(subId);
+			}
+		}
+	 
+		return set;
+	}
+	
+	public List<Subscription> listValidSubscriptionInfo(int productId) {
+		int typeId = -1;// -1表示不做类型限制
+		return listValidSubscriptionInfo(productId, typeId);
+	}
+	
+	public List<Subscription> listValidSubscriptionInfo(int productId, int typeId) {
+		StringBuffer buffer = new StringBuffer(" select s.id,s.name, s.typeId, s.isValid, s.description, s.iconPath,");
+		buffer.append(" s.wpIconPath, qtIconPath, s.modifyTime, s.wpTransIconPath, s.productId, s.subType, s.subPersonCount, s.ratio, s.moreInfo,");
+		buffer.append(" r.position, r.isDefault, r.defaultPush,");
+		buffer.append(" t.name as typeName");
+		buffer.append(" from p_subscription_info s,p_subscription_type_relation r,p_subscription_type t");
+		buffer.append(" where r.typeId=t.id and r.subId=s.id  ");
+		buffer.append(" and t.isvalid=1 and r.isvalid=1 and t.productId=");
+		// buffer.append(" and t.productId= ");
+		buffer.append(productId);
+		if (typeId > 0) {
+			buffer.append(" and t.id= ");
+			buffer.append(typeId);
+		}
+		buffer.append(" order by t.position,r.position,s.id ");
+		List<Subscription> list = this.getJdbcTemplate().query(buffer.toString(), new SubscriptionMapper());
+		List<Subscription> result = new ArrayList<Subscription>();
+		for (Subscription sub : list) {
+			// System.out.println("sub name="+sub.getName());
+			List<Integer> idList = getPubIdListBySubId(sub.getId());
+			String pubIdString = MyStringUtil.integerListToString(idList);
+			if (StringUtils.isNotBlank(pubIdString)) {
+				sub.setPubIdString(pubIdString);
+				if (productId > 0) {
+					sub.setProductId(productId);
+				}
+				result.add(sub);
+			}
+		}
+		return result;
+	}
+	
+	/**
+	 * 获取订阅信息
+	 * @param productId 产品ID
+	 * @param id 订阅ID
+	 * @return
+	 */
+	public Subscription getSubscription(int productId,int id)
+	{
+		// StringBuffer buffer=new StringBuffer(" select s.*,t.name  as typeName ");
+		
+		StringBuffer buffer = new StringBuffer("  select s.id,s.name,s.typeId,r.position,s.isValid,s.description,s.iconPath,");
+		buffer.append(	" s.wpIconPath,qtIconPath,s.modifyTime,s.wpTransIconPath,s.productId,r.isDefault,s.subType,r.defaultPush,s.subPersonCount,  s.ratio, s.moreInfo,");
+		buffer.append(	" t.name  as typeName ");
+	    buffer.append(" from p_subscription_info s,p_subscription_type_relation r,p_subscription_type t ");
+	    buffer.append(" where  r.typeId=t.id and r.subId=s.id ");
+	    buffer.append(" and t.isvalid=1 and r.isvalid=1 and t.productId=? ");
+	    buffer.append(" and s.id=?");
+	    List<Subscription> subList=this.getJdbcTemplate().query(buffer.toString(), new Object[]{productId,id},new SubscriptionMapper());
+	    Subscription sub=null;
+	    if(subList!=null&&subList.size()>0)
+	    {
+	    	sub=subList.get(0);
+	    	List<Integer> idList = getPubIdListBySubId(sub.getId());
+	    	// 将ID列表转换成(用逗号分隔的)ID字符串
+	    	String pubIdString = MyStringUtil.integerListToString(idList);
+			sub.setPubIdString(pubIdString);
+	    }
+	    return sub;
+		
+	}
+ /*
+	public Subscription getSubscription(int id) {
+		StringBuffer buffer = new StringBuffer("  select i.* ,t.name as typeName ");
+		buffer.append(" from p_subscription_info i ,p_subscription_type t ");
+		buffer.append(" where  i.typeid = t.id  and  i.id=  ? ");
+		List<Subscription> subList = this.getJdbcTemplate().query(buffer.toString(), new Object[] { id },
+				new SubscriptionMapper());
+		Subscription sub = null;
+		if (subList != null && subList.size() > 0) {
+			sub = subList.get(0);
+			List<Integer> idList = getPubIdListBySubId(sub.getId());
+			String pubIdString = MyStringUtil.integerListToString(idList);
+			sub.setPubIdString(pubIdString);
+			
+		}
+		return sub;
+	}*/
+
+/*	public List<Integer> getDefaultSubIdList(int productId) {
+		String sql = "select id from p_subscription_info i where i.isDefault = 1 and proudctId=" + productId
+				+ " order by i.position ,i.id ";
+		List<Integer> idList = this.getJdbcTemplate().queryForList(sql, Integer.class);
+		return idList;
+	}
+
+	public Set<Integer> getDefaultSubIdSet(int productId) {
+		List<Integer> idList = getDefaultSubIdList(productId);
+		Set<Integer> set = new HashSet<Integer>();
+		for (Integer id : idList) {
+			set.add(id);
+		}
+		return set;
+	}
+
+	public Set<Integer> getUserSubIdSet(long cid) {
+		String sql = " select subId from  c_client_subscribe s where s.cid = " + cid;
+		List<Integer> idList = this.getJdbcTemplate().queryForList(sql, Integer.class);
+		Set<Integer> set = new HashSet<Integer>();
+		for (Integer id : idList) {
+			set.add(id);
+		}
+		return set;
+	}
+
+	public List<Integer> getUserSubIdList(long cid) {
+		String sql = " select subId from  c_client_subscribe s where s.cid = " + cid;
+		List<Integer> idList = this.getJdbcTemplate().queryForList(sql, Integer.class);
+		return idList;
+	}
+*/
+	public List<Integer> getUserSubPushIdList(long cid) {
+		String sql = " select subId from  c_client_push s where s.cid = " + cid;
+		List<Integer> idList = this.getJdbcTemplate().queryForList(sql, Integer.class);
+		return idList;
+	}
+
+	/**
+	 * 根据订阅ID获取某个订阅下的刊物的ID列表
+	 * @param subId 订阅ID
+	 * @return
+	 */
+	public List<Integer> getPubIdListBySubId(Integer subId) {
+		String sql = " select (p.pubid) from p_subscription_publication p where subscriptionId = " + subId;
+		List<Integer> idList = this.getJdbcTemplate().queryForList(sql, Integer.class);
+		return idList;
+	}
+
+	private class SubscriptionMapper implements RowMapper<Subscription> {
+		public Subscription mapRow(ResultSet rs, int rowNum) throws SQLException {
+			Subscription item = new Subscription();
+			item.setId(rs.getInt("id"));
+			item.setIsValid(rs.getInt("isValid"));
+			item.setName(rs.getString("name"));
+			item.setPosition(rs.getInt("position"));
+			item.setIconPath(rs.getString("iconPath"));
+			item.setWpIconPath(rs.getString("wpIconPath"));
+			item.setDescription(rs.getString("description"));
+			item.setTypeId(rs.getInt("typeId"));
+			item.setTypeName(rs.getString("typeName"));
+			item.setProductId(rs.getInt("productId"));
+			// item.setIsDefault(rs.getInt("isDefault"));
+			item.setDefaultPush(rs.getInt("defaultPush"));
+			item.setSubType(rs.getInt("subType"));
+			item.setModifyTime(rs.getTimestamp("modifyTime"));
+			item.setWpTransIconPath(rs.getString("wpTransIconPath"));
+			// TODO: 增加"订阅人数" 和 "乘系数" 2个字段
+			item.setsubPersonCount(rs.getInt("subPersonCount"));
+			item.setRatio(rs.getFloat("ratio"));
+			item.setMoreInfo(rs.getString("moreInfo"));
+			//新增qt icon
+			item.setQtIconPath(rs.getString("qtIconPath"));
+
+			return item;
+		}
+	}
+
+}

@@ -1,0 +1,257 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.DateUtil;
+import com.sun.syndication.feed.rss.Category;
+import com.sun.syndication.feed.rss.Channel;
+import com.sun.syndication.feed.rss.Content;
+import com.sun.syndication.feed.rss.Description;
+import com.sun.syndication.feed.rss.Item;
+import com.sun.syndication.feed.synd.SyndCategory;
+import com.sun.syndication.feed.synd.SyndCategoryImpl;
+import com.sun.syndication.feed.synd.SyndContent;
+import com.sun.syndication.feed.synd.SyndContentImpl;
+import com.sun.syndication.feed.synd.SyndEntry;
+import com.sun.syndication.feed.synd.SyndEntryImpl;
+import com.sun.syndication.feed.synd.SyndFeed;
+import com.sun.syndication.feed.synd.SyndFeedImpl;
+import com.sun.syndication.io.FeedException;
+import com.sun.syndication.io.SyndFeedOutput;
+import com.sun.syndication.io.WireFeedOutput;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientRssNewsController {
+
+	@Autowired
+	protected INewsService newsService;
+
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+
+	public static final int NEWS_CONTENT_EXPIRE_TIME = 60 * 5;// 取到内容的缓存时间
+
+	@RequestMapping(value = "/news/channel/{id}/news.rss")
+	public String list(@PathVariable int id, HttpServletRequest request, HttpServletResponse response) {
+		System.out.println("id==" + id);
+		String xml = "";
+		String key = "v4_rss_channel_" + id;
+		if (clientNewsCache != null) {
+			xml = (String) clientNewsCache.get(key);
+		}
+		if (StringUtils.isBlank(xml)) {
+			xml = getChannelRssNewsList(id);
+			if (clientNewsCache != null) {
+				clientNewsCache.set(key, NEWS_CONTENT_EXPIRE_TIME, xml);
+			}
+		}
+		RenderUtil.renderXml(response, xml);
+		return null;
+	}
+
+	public String getChannelRssNewsList(int channelId) {
+		Channel feed = new Channel("rss_2.0");   
+		//feed.setAuthor("搜狐新闻移动版");
+		feed.setTitle(getTitle(channelId)); 
+		feed.setLink("http://www.sohu.com/");
+		feed.setFeedType("rss_2.0");
+		feed.setTtl(10);
+		feed.setEncoding("utf-8");//RSS文件编码   
+		feed.setLanguage("zh-cn");
+		feed.setPubDate(new Date());
+		feed.setDescription(feed.getTitle());
+		StringWriter writer = new StringWriter();
+		List<NewsContent> newsList = getNewsList(channelId); 
+		 List<Item> items = new ArrayList<Item>();
+		// 一个entry就是一个item
+		 Item entry;
+		 Description  description;
+		for (NewsContent ns : newsList) {
+			entry = new Item();
+			entry.setTitle(ns.getTitle());
+			entry.setLink("http://3g.k.sohu.com/t/r" + ns.getId());
+			entry.setComments("http://3g.k.sohu.com/t/r" + ns.getId()+"#comments");
+			entry.setPubDate(ns.getCreateTime());
+			description = new Description ();
+			description.setType("text/plain");
+			description.setValue(ns.getNews().getAbstract());
+			entry.setDescription(description);
+
+			Category category = new Category();
+			category.setValue("新闻");
+			List<Category> categories = new ArrayList<Category>();
+			categories.add(category);
+			entry.setCategories(categories);
+
+			Content syndContent = new Content();
+			syndContent.setValue(ns.getNews().getContent());
+			syndContent.setType("html"); 
+			entry.setContent(syndContent);
+
+			items.add(entry);// 将所有item存入entries
+		}
+		// 将entries加入channel
+		feed.setItems(items);
+		try {
+			 WireFeedOutput out = new WireFeedOutput();   
+			return out.outputString(feed);
+			//System.out.println("writer==" + writer);
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+		} catch (FeedException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return writer.toString();
+	}
+	
+	public String getRssNewsList(int channelId) {
+		SyndFeed feed = new SyndFeedImpl();
+		//feed.setAuthor("搜狐新闻移动版");
+		feed.setTitle(getTitle(channelId));
+		feed.setDescription("description");
+		feed.setLink("http://www.sohu.com/");
+		feed.setFeedType("rss_2.0");
+		//feed.setLanguage("zh-cn");
+		//feed.setPublishedDate(new Date());
+		feed.setDescription(feed.getTitle());
+		StringWriter writer = new StringWriter();
+		List<NewsContent> newsList = getNewsList(channelId);
+
+		List entries = new ArrayList();
+		// 一个entry就是一个item
+		SyndEntry entry;
+		SyndContent description;
+		for (NewsContent ns : newsList) {
+			entry = new SyndEntryImpl();
+			entry.setTitle(ns.getTitle());
+			entry.setLink("http://3g.k.sohu.com/t/r" + ns.getId());
+			
+			entry.setPublishedDate(ns.getCreateTime());
+			description = new SyndContentImpl();
+			description.setType("text/plain");
+			description.setValue(ns.getNews().getAbstract());
+			entry.setDescription(description);
+
+			SyndCategory category = new SyndCategoryImpl();
+			category.setName("新闻");
+			List<SyndCategory> categories = new ArrayList<SyndCategory>();
+			categories.add(category);
+			entry.setCategories(categories);
+
+			SyndContent syndContent = new SyndContentImpl();
+			syndContent.setValue(ns.getNews().getContent());
+			syndContent.setType("html");
+			List<SyndContent> contents = new ArrayList<SyndContent>();
+			contents.add(syndContent);
+			entry.setContents(contents);
+
+			entries.add(entry);// 将所有item存入entries
+		}
+		// 将entries加入channel
+		feed.setEntries(entries);
+		try {
+			SyndFeedOutput output = new SyndFeedOutput();
+			output.output(feed, writer);
+			//System.out.println("writer==" + writer);
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+		} catch (FeedException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return writer.toString();
+	}
+
+	public List<NewsContent> getNewsList(int channelId) {
+		List<Integer> idList = getPageIdListByChannelId(channelId);
+		List<NewsContent> newsList = new ArrayList<NewsContent>();
+		if (idList.size() > 0) {
+			for (Integer pageId : idList) {
+				List list = newsService.searchNewsContent("", pageId, 0, 0, 0, 1, 20, 0);
+				if (list != null) {
+					newsList.addAll(list);
+				}
+			}
+			if (idList.size() > 1) {
+				Collections.sort(newsList, new CompareNewsContent());
+			}
+		}
+		return newsList;
+	}
+
+	protected static class CompareNewsContent implements Comparator<NewsContent> {
+		public int compare(NewsContent element1, NewsContent element2) {
+			return (new Integer(element1.getId())).compareTo(element2.getId());
+		}
+	}
+
+	public String getTitle(int channelId) {
+		if (channelId == 1) {
+			return "搜狐焦点新闻";
+		} else if (channelId == 2) {
+			return "搜狐新闻";
+		} else if (channelId == 3) {
+			return "搜狐军事新闻";
+		} else if (channelId == 4) {
+			return "搜狐体育新闻";
+		} else if (channelId == 5) {
+			return "搜狐娱乐新闻";
+		} else if (channelId == 6) {
+			return "搜狐财经新闻";
+		} else if (channelId == 7) {
+			return "搜狐时尚新闻";
+		} else {
+			return "搜狐新闻";
+		}
+	}
+
+	public List<Integer> getPageIdListByChannelId(int channelId) {
+		List<Integer> idList = new ArrayList<Integer>();
+		if (channelId == 1) {
+			idList.add(1);
+		} else if (channelId == 2) {
+			idList.add(172);
+			idList.add(173);
+		} else if (channelId == 3) {
+			idList.add(171);
+		} else if (channelId == 4) {
+			idList.add(168);
+		} else if (channelId == 5) {
+			idList.add(7);
+		} else if (channelId == 6) {
+			idList.add(169);
+		} else if (channelId == 7) {
+			idList.add(15597);
+			idList.add(15598);
+			idList.add(15599);
+			idList.add(15560);
+		} else {
+			idList.add(1);
+		}
+		return idList;
+	}
+}

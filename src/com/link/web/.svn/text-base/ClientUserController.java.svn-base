@@ -1,0 +1,101 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-22 下午04:25:24
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.web;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.HttpUtil;
+import com.wap.sohu.mobilepaper.model.ClientAdaptInf;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+/**
+ * @author alex.lee at 2010-11-22 下午04:25:24
+ * 
+ *         desc：
+ */
+@Controller
+public class ClientUserController {
+
+	@Autowired
+	protected IClientService clientService;
+
+	@RequestMapping("/getCId.go")
+	public String getUserId(HttpServletRequest request, HttpServletResponse response, Model model) {
+		long uId = 0;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null)
+			uId = clientUser.getCid();
+
+		model.addAttribute("uId", uId);
+		return "userInfo/userInfo";
+	}
+
+	/**
+	 * 对应iphone用户注册接口
+	 */
+	@RequestMapping(value = "/user/regist.go")
+	public String regist(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long uId = 0;
+		int sid = 0;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null) {
+			uId = clientUser.getCid();
+			if (clientUser.getPlatform() != null && clientUser.getPlatform().toLowerCase().contains("iphone")) {
+				clientService.updateIphoneStatus(uId, 1);
+			} 
+			ClientAdaptInf cai = clientService.getModelType(clientUser.getCid());
+			if (cai != null) {
+				sid = cai.getId();
+			}
+		}
+		String rt = HttpUtil.getRequestString(request, "rt");
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(getUserXml(uId, sid));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, getUserXml(uId, sid));
+		}
+		return null;
+	}
+
+	private String getUserXml(long uId, int adaptId) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("uid");
+		element.setText(String.valueOf(uId));
+		element = rootElement.addElement("adaptId");
+		element.setText(String.valueOf(adaptId));
+		/*
+		 * element = rootElement.addElement("clearCache"); element.setText("");
+		 */
+		return doc.asXML();
+	}
+	/*
+	 * iphone数据表 tbSubscribetbSubscribeHomeImage tbAllSubscribe tbNewspaper
+	 * tbNewsChannel tbNewsArticle tbNewsImage tbGallery tbPhoto tbRssNewsList
+	 * tbNewsComment
+	 */
+}

@@ -1,0 +1,228 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.FetchInfo;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.TermBroadCast;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+
+@Repository("termDao")
+public class TermDao extends BaseJdbcSupport {	
+	public List<PublicationTerm> findPublished(String dateTime, int pubId, int start, int size) {
+		StringBuffer sql = new StringBuffer("select * from p_term_info where publicId=?");
+		sql.append(" and termStatus = 4 and published=1");
+		if (dateTime != null && !dateTime.equals("latestpaper")) {
+			sql.append(" and publishTime > str_to_date(?,'%Y-%m-%d')");
+		}
+		sql.append(" order by publishTime desc LIMIT ? , ? ");
+		
+		Object[] args = null;
+		if (dateTime != null && !dateTime.equals("latestpaper")) {
+			args = new Object[]{pubId, dateTime, start, size};
+		} else {
+			args = new Object[]{pubId, start, size};
+		}
+		List<PublicationTerm> terms = this.getJdbcTemplate().query(sql.toString(), args,
+				new dataMapper());
+
+		if (terms != null && terms.size() > 0) {
+			fillTermBroadCast(terms);
+		}
+
+		return terms;
+	}
+	
+	private void fillTermBroadCast(List<PublicationTerm> terms) {
+		for (PublicationTerm publicationTerm : terms) {
+			if (publicationTerm.getIsBroadCast() == 1) { // 如果有传播范围控制
+				TermBroadCast termBroadCast = getTermBroadCast(publicationTerm.getId());
+
+				if (termBroadCast != null) {
+					String platformAndVersion = termBroadCast
+							.getPlatformAndVersion();
+
+					HashMap<String, String> platformAndVersionMap = new HashMap<String, String>();
+					if (platformAndVersion != null
+							&& !"".equals(platformAndVersion.trim())) {
+						String[] platformArr = platformAndVersion.split(",");
+						for (String platform : platformArr) {
+							String[] platformVersionArr = platform.split("\\|");
+							if (platformVersionArr != null && platformVersionArr.length == 2) {
+								if (platformAndVersionMap.get(platformVersionArr[0]) == null) {
+									platformAndVersionMap.put(platformVersionArr[0],
+											platformVersionArr[1]);
+								} else {
+									platformAndVersionMap.put(platformVersionArr[0],
+													platformAndVersionMap.get(platformVersionArr[0])
+															+ platformVersionArr[1]);
+								}
+							}
+
+							if (platformVersionArr != null && platformVersionArr.length == 1) {
+								platformAndVersionMap.put(platform, null);
+							}
+						}
+					}
+					termBroadCast.setPlatformAndVersionMap(platformAndVersionMap);
+				}
+
+				publicationTerm.setTermBroadCast(termBroadCast);
+			}
+		}
+	}
+
+	private TermBroadCast getTermBroadCast(long termId) {
+		String SQL_QUERY = "select * from p_term_broadcast where  termId = " + termId + "  order by id desc limit 1";
+
+		List<TermBroadCast> list = this.getJdbcTemplate().query(SQL_QUERY, new dataMapperTermBroadCast());
+		if (list != null && list.size() > 0) {
+			return list.get(0);
+		}
+
+		return null;
+	}
+	
+	
+	public HashSet<Integer> getTermCity(long termId) {
+		String SQL_QUERY = "select pubCityId from p_term_city where  termId = " + termId + "";
+
+		HashSet<Integer> res = new HashSet<Integer>();
+
+		List<Integer> list = this.getJdbcTemplate().query(SQL_QUERY, new dataMapperTermCity());
+		if (list != null && list.size() > 0) {
+			for(Integer pubCityId : list){
+				res.add(pubCityId);
+			}
+		}
+
+		return res;
+	}
+
+	
+	public List<PublicationTerm> findPublishedByPubId(int pubId) {
+		String para = " and publicId=" + pubId;
+		if (pubId == 0) {
+			para = " and publicId in(1,2)";
+		}
+
+		String SQL_QUERY = "select * from p_term_info where published=1 and publishTime>0 and termStatus=4  " + para
+				+ "  order by publishTime desc limit 20";
+
+		List<PublicationTerm> list = this.getJdbcTemplate().query(SQL_QUERY, new dataMapper());
+		return list;
+	}
+	
+	
+	public PublicationTerm getTerm(int termId) {
+		String SQL_QUERY = "select * from p_term_info where id ="+termId;
+
+		List<PublicationTerm> list = this.getJdbcTemplate().query(SQL_QUERY, new dataMapper());
+		if(list!=null && list.size()>0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public List<PublicationTerm> listDeleteCacheTerm() {
+		String sql = "select * from p_term_info where isDeleteLocalCache = 1 and delLocalCacheDate > ?";
+		Date today = DateUtil.getToday();
+		
+		List<PublicationTerm> list = this.getJdbcTemplate().query(sql, new Object[]{today}, new dataMapper());
+		
+		return list;
+	}
+	
+	private class dataMapper implements RowMapper<PublicationTerm> {
+		public PublicationTerm mapRow(ResultSet rs, int rowNum) throws SQLException {
+			PublicationTerm term = new PublicationTerm();
+			term.setId(rs.getInt("id"));
+			term.setCache(rs.getString("cache"));
+			term.setPromptMessage(rs.getString("promptMessage"));
+			term.setPublicId(rs.getInt("publicId"));
+			// term.setPubType(rs.getInt("pubType"));
+			term.setPubTermName(rs.getString("pubTermName"));
+
+			// term.setPublishTime(rs.getDate("publishTime"));
+
+			term.setPublishTime(rs.getTimestamp("publishTime"));
+
+			term.setIsBroadCast(rs.getInt("isBroadCast"));
+			term.setIsDeleteLocalCache(rs.getInt("isDeleteLocalCache"));
+			term.setDelLocalCacheNewsIds(rs.getString("delLocalCacheNewsIds"));
+			term.setDelLocalCacheDate(rs.getTimestamp("delLocalCacheDate"));
+			
+			// term.setSenderName(rs.getString("senderName"));
+			// term.setZipSize(rs.getLong("zipSize"));
+			return term;
+		}
+	}
+
+	private class dataMapperTermBroadCast implements RowMapper<TermBroadCast> {
+		public TermBroadCast mapRow(ResultSet rs, int rowNum) throws SQLException {
+			TermBroadCast termBroadCast = new TermBroadCast();
+
+			termBroadCast.setPlatformAndVersion(rs.getString("platformAndVersion"));
+			termBroadCast.setClientSoftwareVersion(rs.getString("clientSoftwareVersion"));
+			termBroadCast.setIMEI(rs.getString("IMEI"));
+
+			return termBroadCast;
+		}
+	}
+	
+	private class dataMapperTermCity implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getInt("pubCityId");
+		}
+	}
+	
+	public FetchInfo getFetchInfoByTermId(int termId){
+		String sql = "select publicId from p_term_info where id = '"+termId+"' limit 0,1 ";
+		System.out.println(sql);
+		List<FetchInfo> list = this.getJdbcTemplate().query(sql,
+				new dataMapper3());
+		if(list!=null && list.size()>0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	private class dataMapper3 implements RowMapper<FetchInfo> {
+		public FetchInfo mapRow(ResultSet rs, int rowNum) throws SQLException {
+			FetchInfo fetchInfo = new FetchInfo();
+			fetchInfo.setPubId(rs.getInt("publicId"));
+			return fetchInfo;
+		}
+	}
+	
+	public FetchInfo getFetchInfoByNewsId(int newsId){
+		String sql = "select * from p_term_news where newsId ='"+newsId+"' and termId > 0 limit 0,1 ";
+		System.out.println(sql);
+		List<FetchInfo> list = this.getJdbcTemplate().query(sql,
+				new dataMapper2());
+		if(list!=null && list.size()>0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	private class dataMapper2 implements RowMapper<FetchInfo> {
+		public FetchInfo mapRow(ResultSet rs, int rowNum) throws SQLException {
+			FetchInfo fetchInfo = new FetchInfo();
+			fetchInfo.setNewsId(rs.getInt("newsId"));
+			//fetchInfo.setPageNum(rs.getInt("pageNum"));
+			fetchInfo.setTermId(rs.getInt("termId"));
+			
+			return fetchInfo;
+		}
+	}
+
+}

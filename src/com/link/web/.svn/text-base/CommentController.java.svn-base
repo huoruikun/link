@@ -1,0 +1,222 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.NewsComment;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.service.INewsCommentService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+
+@Controller
+public class CommentController {
+
+	private static final String TAG = "[CommentController] : ";
+
+	private static Logger logger = Logger.getLogger(CommentController.class);
+
+	@Autowired
+	protected INewsCommentService newsCommentService;
+	@Autowired
+	protected INewsService newsService;
+	@RequestMapping(value = "/comment.go", params = "m=save")
+	public String save(ModelMap model, HttpServletRequest request, HttpServletResponse response)
+			throws UnsupportedEncodingException {
+		StringBuffer sb = new StringBuffer();
+		sb.append("&newsId=").append(request.getParameter("newsId"));
+		sb.append("&nid=").append(request.getParameter("nid"));
+		sb.append("&pt=").append(request.getParameter("pt"));
+
+		String action = request.getParameter("action");
+		String commentContent = request.getParameter("msg");
+		String nid = request.getParameter("nid");
+
+		String title = request.getParameter("title");
+		String backUrl = request.getParameter("backUrl");
+
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		int productId = ClientUtil.getProductIdFromRequest(request);
+		try {
+			if (p1 != null) {
+				p1 = URLEncoder.encode(p1, "UTF-8");
+			}
+			if (p2 != null) {
+				p2 = URLEncoder.encode(p2, "UTF-8");
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		// logger.info(TAG+"commentContent="+commentContent);
+		if (action != null && "add".equals(action) && commentContent != null && commentContent.length() > 0) {
+			NewsComment comment = new NewsComment();
+			comment.setContent(commentContent);
+			comment.setCtime(new SimpleDateFormat("MM/dd HH:mm").format(new Date()));
+			comment.setPassport(null);
+			comment.setPostIp("13800000001");
+			if (productId == 1) {
+				comment.setAuthor("搜狐新闻客户端网友");
+			}else {
+				comment.setAuthor("手机客户端网友");
+			}
+			comment.setNid(nid);
+			boolean x_ret = newsCommentService.addComment(comment);
+			if (x_ret) {
+				sb.append("&newcomment=").append(URLEncoder.encode(commentContent, "UTF-8")).append("&newctime=")
+						.append(comment.getCtime());
+			}
+		}
+
+		try {
+			if (title != null) {
+				sb.append("&title=").append(URLEncoder.encode(title, "UTF-8"));
+			}
+			if (backUrl != null) {
+				sb.append("&backUrl=").append(URLEncoder.encode(backUrl, "UTF-8"));
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		String redirect = "redirect:comment.go?m=view" + sb.toString();
+		if (StringUtils.isNotEmpty(p1))
+			redirect += "&p1=" + p1;
+
+		return redirect;
+	}
+
+	@RequestMapping(value = "/comment.go", params = "m=view")
+	public String view(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+		int groupPicId = HttpUtil.getRequestInt(request, "gid", 0);
+		String nid = HttpUtil.getRequestString(request, "nid", "0");
+		
+		nid = newsCommentService.getCommentIdByNewsIdOrGroupPicId(newsId, groupPicId);
+		
+		String title = request.getParameter("title");
+		String newcomment = request.getParameter("newcomment");
+		String newctime = request.getParameter("newctime");
+		String backUrl = request.getParameter("backUrl");
+		if ("{{backUrl}}".equalsIgnoreCase(backUrl)) {
+			String termId = request.getParameter("termId"); 
+			String pubId = request.getParameter("pubId");
+			String newsType = request.getParameter("newsType"); 
+			String shortStr = request.getParameter("short");
+			String sid = request.getParameter("sid");
+			int rollingNews = HttpUtil.getRequestInt(request, "rollingNews", 0);
+			StringBuffer sb = new StringBuffer();
+			sb.append("paper/view.do?m=news&fromClient=1&sid=").append(sid).append("&newsId=").append(newsId)
+					.append("&pubId=").append(pubId).append("&termId=").append(termId).append("&newsType=")
+					.append(newsType).append("&short=").append(shortStr).append("&rollingNews=").append(rollingNews);
+			backUrl = sb.toString();
+		}
+		int pageType = ParseUtil.paseInt(request.getParameter("pt"), 0);
+
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		try {
+			if (p1 != null) {
+				p1 = URLEncoder.encode(p1, "UTF-8");
+			}
+			if (p2 != null) {
+				p2 = URLEncoder.encode(p2, "UTF-8");
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		model.addAttribute("P1", p1);
+		model.addAttribute("P2", p2);
+
+		title = (title == null) ? "" : title;
+
+		int p = HttpUtil.getRequestInt(request, "p", 1);
+		int pageSize = 10;
+		// 新接口第一页参数为 1(原来为0), 将 p-1改为p  [add by jianbozhu 2012年3月9日11时17分52秒]
+		int index = p;
+
+		int commentCount = newsCommentService.getCommentCountByNewsIdOrGroupPicId(newsId, groupPicId);
+		List<NewsComment> list;
+		list = newsCommentService.getCommentList(nid, index, pageSize,true);
+
+		int totalPages = (int) Math.ceil((double) commentCount / (double) pageSize);
+		totalPages = totalPages == 0 ? 1 : totalPages;
+
+		// 每页评论第一条 显示的编号
+		int commentShowNumTop = commentCount - ((p - 1) * pageSize);
+
+		if (newcomment != null && newcomment.length() > 0) {
+			// logger.info(TAG+"m=view  newCommentContent="+newcomment);
+			NewsComment comment = new NewsComment();
+			comment.setContent(newcomment);
+			comment.setCtime(newctime);
+			comment.setAuthor("搜狐新闻客户端网友");
+
+			ArrayList<NewsComment> newList = new ArrayList<NewsComment>();
+			newList.add(comment);
+			for (int i = 0; i < list.size() - 1; i++) {
+				newList.add(list.get(i));
+			}
+			list = newList;
+			commentShowNumTop++;
+		}
+
+		model.addAttribute("p", p);
+		model.addAttribute("commentShowNumTop", commentShowNumTop);
+		model.addAttribute("title", title);
+		try {
+			model.addAttribute("titleEncode", java.net.URLEncoder.encode(title, "UTF-8"));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		model.addAttribute("nid", nid);
+		model.addAttribute("list", list);
+		model.addAttribute("pageSize", pageSize);
+		model.addAttribute("totalPages", totalPages);
+		model.addAttribute("commentCount", commentCount);
+		model.addAttribute("newsId", newsId);
+		if (backUrl != null && backUrl.length() > 0) {
+			try {
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				model.addAttribute("BackUrl", backUrl);
+				model.addAttribute("BackUrlEncoder", URLEncoder.encode(backUrl, "UTF-8"));
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} else {
+			logger.error(TAG + "backUrl==null");
+		}
+		// if(pageType==1){
+		// return "comment/newsCommentTouch";
+		// }
+
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId != SysConfig.MODEL_INFO_ID)
+				return "comment/newsCommentTouch";
+		} catch (Exception e) {
+		}
+
+		return "comment/newsComment";
+	}
+}

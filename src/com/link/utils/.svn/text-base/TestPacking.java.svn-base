@@ -1,0 +1,90 @@
+package com.wap.sohu.mobilepaper.util;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.methods.PostMethod;
+
+
+public class TestPacking {
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) throws Exception {
+//		List<String> citys = FileUtils.readLines(new File("resource\\city.txt"), "utf-8");
+//		LinkedList<String> urlList = new LinkedList<String>();
+//		
+//		for(int i=1;i<7;i++){
+//			for(String city : citys){
+//				urlList.add("http://10.13.81.38:7071/packRequest.jsp?packUrl=/mpaper/1/20101202/96_"+i+"_"+city+"/96.zip");
+//			}
+//		}
+		
+		
+		final List<String> imeiList = new ArrayList<String>();
+		int totalNum = 10000;
+		for(int i=0;i<totalNum;i++){
+			String enString = ToolsAesCrypt.Encrypt("a=3&b="+i+"&c=&e=1.50&f=Symbian&g=S60_V3&h=320x480&i=201008091618", "2D2AE7C87C712EB5");
+	        imeiList.add(enString);
+		}
+		
+//		String enString = ToolsAesCrypt.Encrypt("a=2&b=0&c=357988024267010&e=1.50&f=Symbian&g=S60_V3&h=320x480&i=201008091618", "2D2AE7C87C712EB5");
+//        System.out.println("加密后的字串是：" + enString);
+		
+		int tNum = 100;
+		int span = totalNum/tNum;
+		Thread[] tArr = new Thread[tNum];
+		for(int n=0;n<tNum;n++){
+			final int nFinal = n;
+			final int spanFinal = span;
+			
+			tArr[n] = new Thread(){
+				public void run(){
+					for(int i=nFinal*spanFinal;i<(nFinal+1)*spanFinal;i++){
+						try{
+							PostMethod postMethod = new PostMethod("http://10.13.81.38/api/g.do");
+//						    NameValuePair[] data = new NameValuePair[1];
+//						    data[0] = new NameValuePair("clicks", "mpaperhome_1_438_1.html\t2\t1280477889245\nnews_1_9_3743_p1.html\t3\t1280477881212");
+//						    
+//						    postMethod.setRequestBody(data);
+							postMethod.setRequestHeader("SCOOKIE", imeiList.get(i));
+						    HttpClient httpClient = new HttpClient();
+							int statusCode = httpClient.executeMethod(postMethod);
+							String result = postMethod.getResponseBodyAsString();
+							System.out.println("nFinal:"+nFinal+",i:"+i);
+						}catch(Exception e){
+							e.printStackTrace();
+						}
+					}
+				}
+			};
+			tArr[n].start();
+		}
+		
+		
+		/*
+		for(String imei : imeiList){
+			
+			try{
+				PostMethod postMethod = new PostMethod("http://10.1.121.106/mpapi/g.do");
+//			    NameValuePair[] data = new NameValuePair[1];
+//			    data[0] = new NameValuePair("clicks", "mpaperhome_1_438_1.html\t2\t1280477889245\nnews_1_9_3743_p1.html\t3\t1280477881212");
+//			    
+//			    postMethod.setRequestBody(data);
+				postMethod.setRequestHeader("S_COOKIE", imei);
+			    HttpClient httpClient = new HttpClient();
+				int statusCode = httpClient.executeMethod(postMethod);
+				String result = postMethod.getResponseBodyAsString();
+				System.out.println(result);
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+		}
+		*/
+		
+		
+	}
+
+}

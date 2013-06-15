@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="15810"
+   name=""
+   committed-date="2012-03-29T09:23:18.625169Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com"
+   last-author="wangjia"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   name="wap"
+   kind="dir"/>
+</wc-entries>

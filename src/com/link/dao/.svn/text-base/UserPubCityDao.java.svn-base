@@ -1,0 +1,65 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.UserPubCity;
+
+@Repository("userPubCityDao")
+public class UserPubCityDao extends BaseJdbcSupport {
+
+	private SimpleJdbcInsert insertActor = null;
+
+	@PostConstruct
+	public void init(){
+		insertActor = new SimpleJdbcInsert(
+				getInterfaceJdbcTemplate().getDataSource()).withTableName("c_user_pub_city")
+				.usingGeneratedKeyColumns("id");
+	}
+	
+	public void delete(int pubId, long cid){
+		String sql = "delete from c_user_pub_city where cid=? and pubId=?";
+		getAppNewsJdbcTemplate().update(sql, cid, pubId);
+	}
+	
+	public boolean save(UserPubCity userPubCity) {
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(userPubCity); 
+		Number num = insertActor.executeAndReturnKey(parameters);
+		if(num != null && num.intValue() > 0) {
+			return true;
+		}
+		return false;
+	}
+	
+	public UserPubCity find(long cid, int pubId) {
+		String sql = "select * from c_user_pub_city where cid=? and pubId=?";
+		List<UserPubCity> list = getInterfaceJdbcTemplate().query(sql, new Object[]{cid, pubId}, new dataMapper());
+		if(list != null && list.size()>0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	class dataMapper implements RowMapper<UserPubCity> {
+
+		@Override
+		public UserPubCity mapRow(ResultSet rs, int arg1) throws SQLException {
+			UserPubCity userPubCity = new UserPubCity();
+			userPubCity.setId(rs.getInt("id"));
+			userPubCity.setCid(rs.getLong("cid"));
+			userPubCity.setPubCityId(rs.getInt("pubId"));
+			userPubCity.setPubCityId(rs.getInt("pubCityId"));
+			return userPubCity;
+		}
+		
+	}
+}

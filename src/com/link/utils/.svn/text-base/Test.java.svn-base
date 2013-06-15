@@ -1,0 +1,27 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+
+import org.apache.commons.codec.binary.Base64;
+
+
+
+public class Test {
+
+	/**
+	 * @param args
+	 * @throws IOException 
+	 */
+	@SuppressWarnings("unchecked")
+	public static void main(String[] args) throws IOException {
+//		System.out.println(URLEncoder.encode(new String(Base64.encodeBase64("91489".getBytes("utf-8"))),"utf-8"));
+//		System.out.println(new String(Base64.decodeBase64(URLDecoder.decode("OTE0ODk%3D", "utf-8").getBytes("utf-8"))));
+		
+		
+		System.out.println(System.currentTimeMillis());
+		
+		
+	}
+}

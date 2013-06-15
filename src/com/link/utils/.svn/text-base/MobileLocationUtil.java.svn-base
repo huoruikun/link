@@ -1,0 +1,86 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 1.0
+ * Created on: 2010-8-27 上午10:00:03
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import net.sf.json.JSONObject;
+
+import org.apache.commons.lang.StringUtils;
+
+/**
+ * 
+ * @author alex.lee at 2010-8-27 上午10:03:21
+ *
+ * desc：手机定位工具类
+ */
+public class MobileLocationUtil {
+	
+	private static String GOOGEL_LOC_URL = "http://www.google.com/loc/json";
+	
+	/**
+	 * 通过lac 和 手机基站 cellID 取手机的经纬度及地址信息 (通过google 基站定位得到)
+	 * @param lac
+	 * @param cellID
+	 * @return Location 对象
+	 */
+	public static Location getLocationInfoBycellIdAndLac(String lac,String cellID){
+		if(StringUtils.isEmpty(lac) || StringUtils.isEmpty(cellID))
+			return null;
+		
+		String postData = "{\"version\":\"1.1.0\",\"access_token\":\"2:k7j3G6LaL6u_lafw:4iXOeOpTh1glSXe\",\"host\":\"maps.google.com\",\"home_mobile_country_code\":\"460\",\"home_mobile_network_code\":\"0\","
+	    		+"\"address_language\":\"zh_CN\",\"radio_type\":\"gsm\",\"request_address\":true,"
+	    		+"\"cell_towers\":[{\"cell_id\":"+cellID+",\"location_area_code\":"+lac+",\"age\":0,\"mobile_country_code\":460,\"mobile_network_code\":0,\"timing_advance\":5555}]}";
+		
+		Map<String,String> parameters = new HashMap<String,String>();
+		parameters.put("post_data", postData);
+		String json = HttpUtil.post(GOOGEL_LOC_URL, parameters, null,"application/requestJson");
+		if(StringUtils.isNotEmpty(json)){
+			try {
+				json = json.substring(json.indexOf("location\":")+10, json.indexOf(",\"access_token\"")).replaceFirst("\"address\":\\{", "").replaceAll("},\"accuracy\"",",\"accuracy\"");
+				JSONObject jObject = JSONObject.fromObject(json);// 根据字符串转换对象 
+				Location location = (Location) JSONObject.toBean(jObject, Location.class); // 把值绑定成相应的值对
+				return location;
+			} catch (Exception e) {
+				return null;
+			}
+		}else
+			return null;
+	}
+
+	/**
+	 * 通过经纬度得到地址信息( 通过google map 得到)
+	 * @param x
+	 * @param y
+	 * @return
+	 */
+	public static String getAddressByXY(String x,String y){
+		if(StringUtils.isEmpty(x) || StringUtils.isEmpty(y))
+			return null;
+		
+		String searchKey = x+"%2C"+y;
+		String gMapUrl = "http://maps.google.com/maps?f=q&source=s_q&output=js&hl=zh-CN&geocode=&abauth=932628ac%3AdsUpnIvPn53dnzZPeK5iq0t0Qp4&q="+searchKey+"&btnG=%E6%90%9C%E7%B4%A2%E5%9C%B0%E5%9B%BE&vps=2&vrp=1&jsv=270a&sll="+searchKey+"&sspn=0.011403%2C0.090895&g="+searchKey;
+		String html = HttpUtil.get(gMapUrl,null,"gb2312");
+		return html.substring(html.indexOf("addressLines:")+13,html.indexOf("basics:"));
+	}
+
+	
+	public static void main(String[] args) {
+		Location location = getLocationInfoBycellIdAndLac("16647", "47122");
+		System.out.println(location.getCountry());
+		System.out.println(location.getCity());
+		System.out.println(location.getRegion());
+//		System.out.println(getLocationInfoBycellIdAndLac("16647", "47122").getLongitude());
+//		System.out.println(getLocationInfoBycellIdAndLac("16647", "47122").getAddress().country);
+	}
+	
+}

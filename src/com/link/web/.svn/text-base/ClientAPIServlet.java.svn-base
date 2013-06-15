@@ -1,0 +1,906 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.httpclient.HttpException;
+import org.apache.commons.lang.StringUtils;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.support.WebApplicationContextUtils;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientSet;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.Product;
+import com.wap.sohu.mobilepaper.model.PubSubscribeMap;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.UserPubCity;
+import com.wap.sohu.mobilepaper.service.IClientControlService;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+import com.wap.sohu.mobilepaper.util.ParseUtil;
+import com.wap.sohu.mobilepaper.util.RollbackHtmlUtil;
+import com.wap.sohu.mobilepaper.util.Tools;
+import com.wap.sohu.mobilepaper.util.UpgradeUtil;
+
+public class ClientAPIServlet extends BaseServlet {
+
+	private static final long serialVersionUID = 7923419512068992341L;
+	protected IClientControlService clientControlService;
+	public static MemcachedClientIF pubSubscribeMapCache = MemcachedManager
+			.getInstance().getMemcachedClient("clientUserCache");
+
+	private static final Object lock_obj1 = new Object();
+
+	public void init() throws ServletException {
+		super.init();
+		WebApplicationContext wc = WebApplicationContextUtils
+				.getWebApplicationContext(this.getServletContext());
+		clientControlService = (IClientControlService) wc.getBean("clientControlService");
+	}
+
+	public void doGet(HttpServletRequest request, HttpServletResponse response) {
+
+		// long startTime = System.nanoTime();
+		setCommon(request, response);
+		ClientUser clientUser = getClientUser(request, response);
+		ClientInstall clientInstall = (ClientInstall) request
+				.getAttribute("clientInstall");
+		String messageClass = Tools.getReq(request, "m102", "");
+
+		int platformId = 0;
+		int selfVersion = 0;
+
+		boolean isSelfAnalysis = false;
+		if (!RollbackHtmlUtil.rollbackHtml(clientUser, clientInstall)) {
+			String selfAnalysisStr = Tools.getReq(request, "self", "");
+			if ("1".equals(selfAnalysisStr)) {
+				isSelfAnalysis = true;
+			}
+			if (clientUser.getApiVersionMap() != null && clientInstall != null) {
+				Integer pidVersion = clientUser.getApiVersionMap().get(
+						clientInstall.getProductId());
+				if (pidVersion != null && pidVersion >= 4) {
+					isSelfAnalysis = true;
+				}
+			}
+			if (isSelfAnalysis) {
+				selfVersion = 21;
+				platformId = clientUser.getPlatformId();
+			}
+		}
+		// long had[] = PaperUtil.alreadyGetTermIds(messageClass,",");
+
+		ArrayList<Long> had = new ArrayList<Long>();
+		ArrayList<String> hadMsg = new ArrayList<String>();
+
+		PaperUtil.alreadyGetTermIdsNew(messageClass, ",", had, hadMsg);
+
+		StringBuffer outMessage = new StringBuffer();
+		String errorCode = "1500";
+		String content = "";
+		boolean isError = false;
+		ClientInstall clientInstallSend = (ClientInstall) request
+				.getAttribute("clientInstall");
+
+		PrintWriter out = null;
+		try {
+			out = response.getWriter();
+			try {
+
+				List<PublicationTerm> termData = clientService.getTodaysTerms(
+						clientUser, clientInstallSend.getProductId(), true, 0,
+						30, true);
+
+				try {
+					if (!checkIsActive(clientInstallSend, clientUser, request)) { // 需要激活的渠道
+						termData = new ArrayList<PublicationTerm>();
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+				// System.out.println("--------------a "+(System.nanoTime() -
+				// startTime )+"ms");
+
+				if (termData != null && termData.size() > 1) {
+					Collections.sort(termData,
+							new Comparator<PublicationTerm>() {
+								public int compare(PublicationTerm o1,
+										PublicationTerm o2) {
+									try {
+										return (int) (o1.getPublishTime()
+												.getTime() - o2
+												.getPublishTime().getTime());
+									} catch (Exception e) {
+										e.printStackTrace();
+										return 0;
+									}
+								}
+							});
+				}
+
+				// long startTime2 = System.currentTimeMillis();
+
+				if (clientUser.getProtocol() >= 3) {
+					content = getXML3(termData, clientUser, had, request,
+							platformId, selfVersion);
+				} else {
+					content = getXML(termData, clientUser, had, request,
+							platformId, selfVersion);
+				}
+
+				// System.out.println("--------------b "+(System.nanoTime() -
+				// startTime )+"ms");
+
+				if (ClientUtil.isTestPhone(clientUser.getIMEI())
+						&& clientUser.getCid() > 0) { // 测试手机从测试服务器取信息
+					System.out
+							.println("test iphone imei=" + clientUser.getIMEI()
+									+ "\t" + clientUser.getCid());
+					String xml = ClientUtil.getTestServerData(clientUser,
+							content, messageClass, null);
+					if (StringUtils.isNotEmpty(xml))
+						content = xml;
+				}
+			} catch (HttpException he) {
+				he.printStackTrace();
+				errorCode = "1700";
+				isError = true;
+			} catch (Exception e) {
+				e.printStackTrace();
+				errorCode = "1600";
+				isError = true;
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			isError = true;
+		}
+
+		if (!isError) {
+			outMessage.append(content);
+		} else { // 出现异常
+			outMessage = new StringBuffer("<root><error><value>");
+			outMessage.append(errorCode);
+			outMessage.append("</value></error></root>");
+		}
+
+		// 关闭接收的处理
+		try {
+			Object vObj = request.getAttribute("v");
+			if (vObj != null && (Integer) vObj != 0) { // 关闭接收
+				outMessage = new StringBuffer("<root><d><d1>"
+						+ clientUser.getCid() + "</d1></d></root>");
+				LogWriter.log(DateUtil.getDate("")
+						+ "\t===user_close_clientsoftware===\t"
+						+ clientUser.getIMEI() + "\t"
+						+ clientInstallSend.getProductId() + "\t" + vObj);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		// System.out.println("--------------g_do total with out filter "+(System.nanoTime()
+		// - startTime )+"ms");
+
+		try {
+			byte[] data = outMessage.toString().getBytes("utf-8");
+			response.setContentLength(data.length);
+			out.print(outMessage);
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+
+		LogWriter.runlog(request.getAttribute("ip") + "\t"
+				+ DateUtil.getDate("") + "\t" + request.getQueryString() + "\t"
+				+ request.getAttribute("scookie") + "\t"
+				+ outMessage.toString() + "\t" + request.getAttribute("u"));
+
+		/*
+		 * LogWriter.runlog(HttpUtil.getIpAddr(request)+ "\t"+
+		 * DateUtil.getDate("")+ "\t" + request.getQueryString()+ "\t" +
+		 * ToolsAesCrypt
+		 * .Decrypt(clientUser.getS_cookie(),HeaderDataUtil.KEY_DECRIPT_KEY) +
+		 * "\t" + outMessage.toString());
+		 */
+
+		return;
+	}
+
+	// new
+	public String getXML3(List<PublicationTerm> termData,
+			ClientUser clientUser, ArrayList<Long> had,
+			HttpServletRequest request, int platformId, int selfVersion) {
+
+		// long startTime2 = System.nanoTime();
+		String outMessageClass = Tools.getDateFormat("yyyy-MM-dd") + "_";
+		StringBuffer content = new StringBuffer("<root>");
+
+		String mpaperRoot = SysConfig.PAGE_STATIC_URL_ROOT;
+
+		String ip = PaperUtil.getDownloadIP();
+
+		String platform = clientUser.getPlatform();
+		String platformVersion = clientUser.getPlatformVersion();
+		String resolution = clientUser.getResolution();
+		String machineId = clientUser.getMachineId();
+		
+		ClientInstall clientInstallSend = (ClientInstall) request
+				.getAttribute("clientInstall");
+		
+		float version = UpgradeUtil.getVersionFloat(clientInstallSend.getVersion());
+
+		for (PublicationTerm term : termData) {
+			// by huoruikun -- 暂不实现：如果不是新用户，且发布时间早于安装时间，则不忽略该刊物
+			// try {
+			// if (!clientUser.isNew()
+			// && clientUser.getInstallTime() > 0
+			// && clientUser.getInstallTime() > term.getPublishTime()
+			// .getTime()) {
+			// continue;
+			// }
+			// } catch (Exception e) {
+			// // e.printStackTrace();
+			// }
+
+			// System.out.println("--------------b a 0 "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			outMessageClass = outMessageClass + term.getId() + ",";
+
+			if (PaperUtil.hasGetNew(term.getId(), had)) { // 已经取过
+				continue;
+			}
+
+			Publication publication = clientService.getPublicationFast(term
+					.getPublicId());
+			int zipArea = publication.getZipArea();
+
+			// System.out.println("--------------b a 0.1 "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			// 改动 for 自定义区域 和 demo演示
+			int getSidPubId = term.getPublicId();
+			if (publication.getViewPubId() > 0) {
+				getSidPubId = publication.getViewPubId();
+			}
+
+			// 获得天气信息
+			int weatherCode = 74;
+			int displayWeather = publication.getDisplayWeather();
+			if (displayWeather == 1) {
+				try {
+					ClientSet clientSet = clientUser.getUserSetMap().get(
+							publication.getProductId());
+					if (clientSet != null) {
+						weatherCode = clientSet.getArea();
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			if (weatherCode == 0) {
+				weatherCode = 74;
+			}
+
+			// System.out.println("weatherCode:"+weatherCode);
+
+			// 改动结束
+
+			// System.out.println("--------------b a 1 "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			int modelType = clientService.getModelTypeNewCache(getSidPubId,
+					platform, platformVersion, resolution, machineId);
+
+			// System.out.println("zealer_zealer:modelType:"+modelType);
+
+			if (clientUser.getMatchArea() == 0) {
+				clientUser.setMatchArea(74);
+			}
+
+			// System.out.println("--------------b a 2 "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			// =============================增加打包策略
+			// begin=========================
+			int zipPolicy = getZipPolice(clientUser, clientInstallSend,
+					publication);
+			// ==============================增加打包策略
+			// end===========================
+
+			// System.out.println("--------------b b "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			// 取得个性化订阅版面ID
+			long cid = clientUser.getCid();
+
+			// 获取用户订阅的版面ID列表,此列表已经排序
+			int pubId = term.getPublicId();
+			String pageIds = subscriptionService.subscribePagesString(cid,
+					pubId, ",");
+
+			// System.out.println("zealer_test:pageIds:" + pageIds);
+			// 通过用户订阅的版面ID列表得到对应的map id
+			Long mapId = getMapId(cid, pubId);
+			// System.out.println("zealer_test:mapId:"+mapId);
+
+			// =============================获取 pubCityId
+			// begin=========================
+			int pubCityId = getPubCityId(cid, publication);
+
+			if (pubId == 109) {
+				System.out.println("108");
+			}
+			String zipUrl = PaperUtil.getURL(ip, term.getPublicId(), term
+					.getId(), term.getPublishTime(), modelType, pubCityId, term
+					.getId()
+					+ ".zip", zipPolicy, mapId, platformId, selfVersion,
+					weatherCode);
+			// System.out.println("zipUrll---"+zipUrl);
+			// System.out.println("--------------b c "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			// LogWriter.log("********************zipUrl = "+zipUrl);
+			String htmlUrl = null;
+			if (StringUtils.isNotEmpty(zipUrl)) {
+				mpaperRoot = zipUrl
+						.substring(0, zipUrl.indexOf("/mpaper/") + 8);
+				htmlUrl = PaperUtil.getHtmlUrl(mpaperRoot, term.getPublicId(),
+						term.getId(), term.getPublishTime(), modelType,
+						pubCityId, "mpaperhome_1_" + term.getId() + "_1.html",
+						zipPolicy, mapId, platformId, selfVersion, weatherCode);
+			}
+
+			// System.out.println("--------------b c 1 "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+			//
+			// String htmlUrl = PaperUtil.getHtmlUrl(term.getPublicId(),
+			// term.getId(), term.getPublishTime(),
+			// modelType, zipArea == 1 ? clientUser.getMatchArea() : 0,
+			// "mpaperhome_1_" + term.getId() + "_1.html");
+
+			if (StringUtils.isEmpty(zipUrl) || StringUtils.isEmpty(htmlUrl)
+					|| !clientService.openUrlCache(zipUrl)
+					|| !clientService.openUrlCache(htmlUrl)) {
+				System.out.println("error::::zip url not found!!" + zipUrl);
+				PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,
+						PaperUtil.SMS_ALERT_INFO_CONTENT + term.getId());// 加入出错机制处理
+				continue;
+			}
+
+			int zipLength = clientService.openRequestLengthSizeCache(zipUrl);
+			if (zipLength > 5000) {
+				PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,
+						PaperUtil.SMS_ALERT_INFO_CONTENT + term.getId());// 加入出错机制处理
+				System.out.println("error::::zip size too large!!" + zipUrl
+						+ "\t" + zipLength);
+				continue;
+			}
+			if (zipLength < 1) {
+				PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,
+						PaperUtil.SMS_ALERT_INFO_CONTENT + term.getId());// 加入出错机制处理
+				System.out.println("error::::zip size too small!!" + zipUrl
+						+ "\t" + zipLength);
+				continue;
+			}
+			// System.out.println("--------------b d "+term.getId()+ " "
+			// +(System.nanoTime() - startTime2 )+"ms");
+
+			int subId = subscriptionService.getSubIdByPubId(clientInstallSend
+					.getProductId(), pubId);
+
+			if (StringUtils.isNotBlank(SysConfig.DOWNLOAD_DOMAIN)) {
+				zipUrl = StringUtils.replace(zipUrl, ip,
+						SysConfig.DOWNLOAD_DOMAIN);
+				htmlUrl = StringUtils.replace(htmlUrl, ip,
+						SysConfig.DOWNLOAD_DOMAIN);
+				mpaperRoot = StringUtils.replace(mpaperRoot, ip,
+						SysConfig.DOWNLOAD_DOMAIN);
+			}
+			
+			//android大于2.2，zipUrl使用cache.k.sohu.com
+			if(platformId == 3 && version >= 2.0) {
+				zipUrl = StringUtils.replace(zipUrl, SysConfig.DOWNLOAD_DOMAIN, SysConfig.CDN_HOST);
+				System.out.println("zipUrl::"+zipUrl);
+			}
+
+			content.append("<a>").append("<a1>");
+			content.append(StringUtils.trim(term.getPromptMessage()));
+			content.append("</a1>").append("<a2>");
+
+			// 由刊物所属产品的名称换位当前产品的名称
+			Product product = clientService.getProduct(clientInstallSend
+					.getProductId());
+			if (product != null && StringUtils.isNotBlank(product.getName())) {
+				content.append(StringUtils.trim(product.getName()));
+			} else {
+				content.append(StringUtils.trim(term.getSenderName()));
+			}
+			content.append("</a2>").append("<a3>");
+			content.append(zipUrl);
+			content.append("</a3>").append("<a4>");
+			content.append(htmlUrl);
+			content.append("</a4>").append("<a5>");
+			content.append(term.getPublicId());
+			content.append("</a5>").append("<a6>");
+			content.append(term.getId());
+			content.append("</a6>");
+
+			String newsList = newsService.getTopNewsInTermCache((int) term
+					.getId(), 1);
+
+			content.append("<a11>" + zipLength + "KB</a11><a12>" + newsList
+					+ "</a12>");
+
+			content.append("<a13>");
+			content.append(pubId);
+			content.append("</a13>");
+			content.append("<a14>");
+			content.append(subId);
+			content.append("</a14>");
+
+			if (StringUtils.isNotEmpty(term.getCache())) {
+				String[] caches = term.getCache().split(";");
+				for (String s : caches) {
+					String[] ss = s.split("=");
+					if (ss.length == 2
+							&& ParseUtil.paseInt(ss[0], -1) == modelType
+							&& ss[1] != null) {
+						content.append("<a7>" + ss[1] + "</a7>");
+						content.append("<a8>"
+								+ clientService.getLoadBalanceZipURI()
+								+ term.getPublicId() + "/cache/" + modelType
+								+ "/" + ss[1] + "/cache.zip</a8>");
+						break;
+					}
+				}
+			}
+
+			content.append("<a10>" + term.getPubType() + "</a10>");
+			content.append("</a>");
+
+			// by huoruikun 暂不实现：新用户取报纸时只给一个
+			// if (clientUser != null && clientUser.isNew()) {
+			// break;
+			// }
+		}
+		if (outMessageClass.endsWith(",")) {
+			outMessageClass = outMessageClass.substring(0, outMessageClass
+					.length() - 1);
+		}
+		if (content.length() > 0 && !outMessageClass.endsWith("_")) {
+			content.append("<b><b1>").append(outMessageClass).append(
+					"</b1></b>");
+		}
+
+		// System.out.println("--------------b e " +(System.nanoTime() -
+		// startTime2 )+"ms");
+
+		if (SysConfig.isUpdate) {
+			String upgrade = UpgradeUtil.checkUpgrade(clientUser, false,
+					clientInstallSend);
+			if (upgrade != null && upgrade.length() > 0) {
+				content.append("<c><c1>" + upgrade + "</c1></c>");
+			}
+		}
+
+		// System.out.println("--------------b f " +(System.nanoTime() -
+		// startTime2 )+"ms");
+
+		content.append("<d><d1>" + clientUser.getCid() + "</d1></d>");
+
+		content.append("<f>" + mpaperRoot + "</f>");
+		
+		if(clientControlService.hasNewLoadingPage(clientUser.getPlatform(), 
+				clientUser.getPlatformVersion(), clientInstallSend.getLoadingPageId())) {
+			content.append("<g>1</g>");
+		}else{
+			content.append("<g>0</g>");
+		}
+
+		try {
+			// content.append("<t>" +
+			// clientUser.getUserSetMap().get(clientInstallSend.getProductId()).getZipPolicy()
+			// + "</t>");
+			content.append("<t>"
+					+ clientUser.getClientSet(clientInstallSend.getProductId())
+							.getZipPolicy() + "</t>");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		content.append("</root>");
+		return content.toString();
+	}
+
+	public int getPubCityId(long cid, Publication publication) {
+		if (publication.getZipArea() == 1) {
+			UserPubCity userPubCity = areaService.getUserPubCity(cid,
+					publication.getId());
+			int pubCityId = 0;
+			if (userPubCity != null) {
+				pubCityId = userPubCity.getPubCityId();
+			}
+			return pubCityId;
+		}
+		return 0;
+		// if (zipArea == 0) {
+		// pubCityId = 0;
+		// }
+		// return pubCityId;
+	}
+
+	public int getZipPolice(ClientUser clientUser,
+			ClientInstall clientInstallSend, Publication publication) {
+		int zipPolicy = 2; // 这个给个默认值, 均衡的阅读模式
+		
+		// if (clientInstallSend.isIntelligentPackage()
+		// && StringUtils.equalsIgnoreCase(clientUser.getNetwork(), "wifi")) {
+		// return 4;
+		// }
+
+		try {
+			// int zipPolicySend =
+			// clientUser.getUserSetMap().get(clientInstallSend.getProductId()).getZipPolicy();
+			ClientSet clientSet = clientUser.getClientSet(clientInstallSend
+					.getProductId());
+			if (clientSet != null) {
+				int zipPolicySend = clientSet.getZipPolicy();
+
+				if (zipPolicySend == -1) { // 遵从系统的设置
+					zipPolicy = publication.getZipPolicy();
+					if ("iphone".equalsIgnoreCase(clientUser.getPlatform())) {
+						zipPolicy = 3;
+					}
+				} else { // 该用户已经有个性化设置
+					zipPolicy = zipPolicySend;
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		if (zipPolicy >= 0 && zipPolicy <= 3) { // 最终的范围检查
+			// ok
+		} else { // 客户端传过来的值有错误 , 这时给他一个 "所有版列表页和首版新闻页的打包策略"
+			System.out.println("zipPolicy_err:" + zipPolicy);
+			zipPolicy = 2;
+		}
+		return zipPolicy;
+	}
+
+	public int getWeatherCode(ClientUser clientUser, Publication publication) {
+		int weatherCode = 74;
+		if (publication != null) {
+			int displayWeather = publication.getDisplayWeather();
+			if (displayWeather == 1) {
+				try {
+					ClientSet clientSet = clientUser.getUserSetMap().get(
+							publication.getProductId());
+					if (clientSet != null)
+						weatherCode = clientSet.getArea();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		if (weatherCode == 0) {
+			weatherCode = 74;
+		}
+		return weatherCode;
+	}
+
+	public boolean checkIsActive(ClientInstall clientInstallSend,
+			ClientUser clientUser, HttpServletRequest request) {
+		int channelId = 0;
+		ClientInstall currentProductInstallInDb = null;
+		if (clientInstallSend != null && clientInstallSend.getChannelId() > 0) {
+			channelId = clientInstallSend.getChannelId();
+		} else {
+			currentProductInstallInDb = clientUser
+					.getUserInstallProducIdChannelIdMap().get(
+							clientInstallSend.getProductId());
+			channelId = currentProductInstallInDb.getCurrentChannelId();
+			if (channelId == 0) {
+				channelId = currentProductInstallInDb.getChannelId();
+			}
+		}
+		String channelIdStr = channelId + "";
+
+		// 如果是5800-5999的渠道号，不管激活不激活，都push报纸
+		if (channelId >= 5800 && channelId < 6000) {
+			return true;
+		}
+
+		if (channelIdStr.startsWith("5") || channelIdStr.startsWith("6")) { // 需要激活的渠道
+			Integer noActive = (Integer) request.getAttribute("noActive");
+			if (noActive != null && noActive.intValue() == 1) { // 明确传了 未激活
+				// 从sookie中获取
+				// System.out.println("ssss===noActive:"+noActive+"\t"+channelIdStr+"\t"+clientUser.getCid());
+				return false;
+			} else if (clientInstallSend != null
+					&& clientInstallSend.getIsActive() == 1) {
+				return true;
+			} else if (currentProductInstallInDb != null
+					&& currentProductInstallInDb.getIsActive() == 0) { // 数据库中该渠道没有激活
+				// System.out.println("ssss===noActiveByInstall:"+noActive+"\t"+channelIdStr+"\t"+clientUser.getCid());
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public long getMapId(long cid, int pubId) {
+		Long mapId = 0L;
+		String pageIds = subscriptionService.subscribePagesString(cid, pubId,
+				",");
+		if (pageIds != null && pageIds.trim().length() > 0
+				&& ClientAPIServlet.pubSubscribeMapCache != null) {
+			mapId = (Long) ClientAPIServlet.pubSubscribeMapCache.get(pageIds);
+			if (mapId == null || mapId.longValue() <= 0) {// 有pageIds，如果mapId为空或者mapId<=0
+				synchronized (lock_obj1) {
+					mapId = (Long) ClientAPIServlet.pubSubscribeMapCache
+							.get(pageIds);
+					if (mapId == null || mapId.longValue() <= 0) {// 有pageIds，如果mapId为空或者mapId<=0
+
+						PubSubscribeMap psMap = pubSubscribeMapDao
+								.list(pageIds);
+						if (psMap != null) {
+							mapId = psMap.getId();
+						} else {
+							PubSubscribeMap pubSubscribeMap = new PubSubscribeMap();
+							pubSubscribeMap.setPageIds(pageIds);
+							mapId = pubSubscribeMapDao.add(pubSubscribeMap);
+						}
+						ClientAPIServlet.pubSubscribeMapCache.set(pageIds,
+								60 * 60 * 24, mapId);
+
+					}
+				}
+			}
+		}
+		return mapId;
+	}
+
+	public String getXML(List<PublicationTerm> termData, ClientUser clientUser,
+			ArrayList<Long> had, HttpServletRequest request, int platformId,
+			int selfVersion) throws HttpException {
+		ClientInstall clientInstallSend = (ClientInstall) request
+				.getAttribute("clientInstall");
+		String outMessageClass = Tools.getDateFormat("yyyy-MM-dd") + "_";
+		StringBuffer content = new StringBuffer("<root>");
+		content.append(getUpgradeInfo(clientUser, clientInstallSend));
+
+		String platform = clientUser.getPlatform();
+		String platformVersion = clientUser.getPlatformVersion();
+		String resolution = clientUser.getResolution();
+		String machineId = clientUser.getMachineId();
+
+		for (PublicationTerm term : termData) {
+			outMessageClass = outMessageClass + term.getId() + ",";
+
+			if (PaperUtil.hasGetNew(term.getId(), had)) { // 已经取过
+				continue;
+			}
+
+			Publication publication = clientService.getPublicationFast(term
+					.getPublicId());
+			int zipArea = publication.getZipArea();
+
+			// 改动 for 自定义区域 和 demo演示
+			int getSidPubId = term.getPublicId();
+			if (publication.getViewPubId() > 0) {
+				getSidPubId = publication.getViewPubId();
+			}
+			// 改动结束
+
+			// 获得天气信息
+			int weatherCode = 74;
+			int displayWeather = publication.getDisplayWeather();
+			System.out.println("displayWeather:displayWeather:"
+					+ displayWeather);
+			if (displayWeather == 1) {
+				try {
+					ClientSet clientSet = clientUser.getUserSetMap().get(
+							publication.getProductId());
+					System.out
+							.println("displayWeather:publication.getProductId():"
+									+ publication.getProductId());
+					if (clientSet != null) {
+						weatherCode = clientSet.getArea();
+					}
+					System.out.println("displayWeather:weatherCode:"
+							+ weatherCode);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+
+			int modelType = clientService.getModelTypeNewCache(getSidPubId,
+					platform, platformVersion, resolution, machineId);
+
+			if (clientUser.getMatchArea() == 0) {
+				clientUser.setMatchArea(74);
+			}
+
+			// =============================增加打包策略
+			// begin=========================
+			int zipPolicy = 2; // 这个给个默认值, 均衡的阅读模式
+			try {
+				// int zipPolicySend =
+				// clientUser.getUserSetMap().get(clientInstallSend.getProductId()).getZipPolicy();
+				int zipPolicySend = clientUser.getClientSet(
+						clientInstallSend.getProductId()).getZipPolicy();
+
+				if (zipPolicySend == -1) { // 遵从系统的设置
+					zipPolicy = publication.getZipPolicy();
+				} else { // 该用户已经有个性化设置
+					zipPolicy = zipPolicySend;
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			if (zipPolicy >= 0 && zipPolicy <= 3) { // 最终的范围检查
+				// ok
+			} else { // 客户端传过来的值有错误
+				System.out.println("zipPolicy_err:" + zipPolicy);
+				zipPolicy = 2;
+			}
+			// ==============================增加打包策略
+			// end===========================
+
+			long cid = clientUser.getCid();
+
+			// 获取用户订阅的版面ID列表,此列表已经排序
+			int pubId = term.getPublicId();
+			String pageIds = subscriptionService.subscribePagesString(cid,
+					pubId, ",");
+
+			// 通过用户订阅的版面ID列表得到对应的map id
+			Long mapId = 0L;
+
+			if (pageIds != null && pageIds.trim().length() > 0) {
+				mapId = (Long) pubSubscribeMapCache.get(pageIds);
+				if (mapId == null) {
+					synchronized (lock_obj1) {
+						mapId = (Long) pubSubscribeMapCache.get(pageIds);
+						if (mapId == null) {
+							PubSubscribeMap pubSubscribeMap = new PubSubscribeMap();
+							pubSubscribeMap.setPageIds(pageIds);
+							mapId = pubSubscribeMapDao.add(pubSubscribeMap);
+							pubSubscribeMapCache.set(pageIds, 60 * 60 * 24,
+									mapId);
+						}
+					}
+				}
+			}
+
+			String zipUrl = PaperUtil.getURL(term.getPublicId(), term.getId(),
+					term.getPublishTime(), modelType, zipArea == 1 ? clientUser
+							.getMatchArea() : 0, term.getId() + ".zip",
+					zipPolicy, mapId, platformId, selfVersion, weatherCode);
+
+			String htmlUrl = null;
+			if (StringUtils.isNotEmpty(zipUrl)) {
+				htmlUrl = PaperUtil.getHtmlUrl(zipUrl.substring(0, zipUrl
+						.indexOf("/mpaper/") + 8), term.getPublicId(), term
+						.getId(), term.getPublishTime(), modelType,
+						zipArea == 1 ? clientUser.getMatchArea() : 0,
+						"mpaperhome_1_" + term.getId() + "_1.html", zipPolicy,
+						mapId, platformId, selfVersion, weatherCode);
+			}
+
+			if (StringUtils.isEmpty(zipUrl) || StringUtils.isEmpty(htmlUrl)) {
+				PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,
+						PaperUtil.SMS_ALERT_INFO_CONTENT + term.getId());// 加入出错机制处理
+				continue;
+			}
+
+			content.append("<msg>").append("<remind>");
+			content.append(term.getPromptMessage());
+			content.append("</remind>").append("<title>");
+			content.append(term.getSenderName());
+			content.append("</title>").append("<type>");
+			content.append(term.getPubType());
+			content.append("</type>").append("<zipurl>");
+			content.append(zipUrl);
+			content.append("</zipurl>").append("<rurl>");
+			content.append(htmlUrl);
+			content.append("</rurl>").append("</msg>");
+		}
+
+		if (outMessageClass.endsWith(",")) {
+			outMessageClass = outMessageClass.substring(0, outMessageClass
+					.length() - 1);
+		}
+		if (content.length() > 0 && !outMessageClass.endsWith("_")) {
+			content.append("<msgclass><value>").append(outMessageClass).append(
+					"</value></msgclass>");
+		}
+		content.append("<user><uid>" + clientUser.getCid()
+				+ "</uid></user></root>");
+		return content.toString();
+	}
+
+	private String getUpgradeInfo(ClientUser clientUser,
+			ClientInstall clientInstall) {
+		Pattern upgradePattern = Pattern
+				.compile("(?is).*?<update>(.*?<upgrade>(\\d+).*?)</update>.*");
+		String updateMessage = UpgradeUtil.checkUpgrade(clientUser, false,
+				clientInstall);
+
+		if (updateMessage != null && updateMessage.length() > 0) {
+			Matcher matcher = upgradePattern.matcher(updateMessage);
+			if (matcher.find()) {
+				if ("100".equals(matcher.group(2))) {
+					return "";
+				} else {
+					return "<update>" + matcher.group(1) + "</update>";
+				}
+			}
+		}
+		return "";
+	}
+
+	@Override
+	public void doPost(HttpServletRequest request, HttpServletResponse response) {
+		doGet(request, response);
+	}
+
+	private class UserPubPage {
+		private long userId;
+		private int pubId;
+		private List<Integer> pageIds;
+
+		public long getUserId() {
+			return userId;
+		}
+
+		public void setUserId(long userId) {
+			this.userId = userId;
+		}
+
+		public int getPubId() {
+			return pubId;
+		}
+
+		public void setPubId(int pubId) {
+			this.pubId = pubId;
+		}
+
+		public List<Integer> getPageIds() {
+			return pageIds;
+		}
+
+		public void setPageIds(List<Integer> pageIds) {
+			this.pageIds = pageIds;
+		}
+
+		public String getPageString() {
+
+			String ids = "";
+			for (Integer id : pageIds) {
+				ids += id + "_";
+			}
+			return ids;
+		}
+	}
+
+}

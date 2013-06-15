@@ -1,0 +1,1101 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.Properties;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.ClientAdaptInf;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.pic.GroupInfo;
+import com.wap.sohu.mobilepaper.model.pic.GroupInfoVo;
+import com.wap.sohu.mobilepaper.model.pic.GroupPic;
+import com.wap.sohu.mobilepaper.model.pic.GroupPicCategory;
+import com.wap.sohu.mobilepaper.model.pic.GroupPicInfo;
+import com.wap.sohu.mobilepaper.model.pic.TagInfo;
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.model.xml.News;
+import com.wap.sohu.mobilepaper.service.AdaptServiceImpl;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.IGroupPicService;
+import com.wap.sohu.mobilepaper.service.INewsCommentService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.IPublicationService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.ArticleUtil;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.MyStringUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+/**
+ * 组图新闻相关的接口提供类
+ *
+ */
+@Controller
+public class ClientPhotoController {
+
+	private static final Logger logger = Logger.getLogger(ClientPhotoController.class);
+
+	@Autowired
+	protected IClientService clientService;
+
+	@Autowired
+	protected INewsService newsService;
+
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+	@Autowired
+	protected INewsCommentService newsCommentService;
+	@Autowired
+	protected AdaptServiceImpl adaptService;
+	@Autowired
+	protected IPublicationService publicationService;
+	@Autowired
+	protected IGroupPicService groupPicService;
+
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+
+	public static final int NEWS_CONTENT_EXPIRE_TIME = 60 * 60 * 2;// 取到内容的缓存时间
+
+	/**
+	 * 组图信息接口(组图墙)
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/photos/gallery.go")
+	public String newsDetail(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		int gid = HttpUtil.getRequestInt(request, "gid", 0);
+		int protocal = 0;
+		if (clientUser != null) {
+			protocal = clientUser.getProtocol();
+		}
+		
+		// 客户端版本的协议号大于等于5 或者 明确的传了组图Id
+		if (protocal >= 5 || gid > 0) {
+			this.galleryByProtocal5(request, response);
+		} else {
+			this.galleryByProtocal4(request, response);
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/photos/needSyncPicIdList.go")
+	public String hotPicList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int picType = HttpUtil.getRequestInt(request, "picType", 3);
+		List<GroupPicInfo> picList = groupPicService.listGroupListHot(picType);
+		StringBuilder builder = new StringBuilder();
+		if (picList != null) {
+			for (GroupPicInfo nc : picList) {
+				int newsId = groupPicService.getNewsIdByGroupInfo(nc.getId());
+				if (newsId <= 0) {
+					builder.append(nc.getId());
+					builder.append(",");
+				}
+			}
+		}
+		RenderUtil.renderText(response, builder.toString());
+		return null;
+	}
+
+	@RequestMapping(value = "/photos/hotList.go")
+	public String hotList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		String imgSize = getPicGroupType(clientUser, sid, "");
+		int picType = HttpUtil.getRequestInt(request, "picType", 3);
+		String key = "hotList_" + imgSize + "_" + picType + "_v2";
+		//System.out.println(key);
+		String returnValue = null;
+		if (clientNewsCache != null) {
+			returnValue = (String) clientNewsCache.get(key);
+		}
+		if (StringUtils.isNotBlank(returnValue)) {
+			RenderUtil.renderJson(response, returnValue);
+		} else {
+			String callback = HttpUtil.getRequestString(request, "callback", "fcallback");
+			List<GroupPicInfo> picList = groupPicService.listGroupListHot(picType);
+			ArticleUtil articleUtil = new ArticleUtil();
+			JSONObject commentJson = new JSONObject();
+			if (picList != null) {
+				List<JSONObject> items = new LinkedList<JSONObject>();
+				for (GroupPicInfo nc : picList) {
+					int newsId = groupPicService.getNewsIdByGroupInfo(nc.getId());
+					if (newsId <= 0) {
+						continue;
+					}
+					JSONObject item = new JSONObject();
+					item.element("id", nc.getId());
+					item.element("title", JSonUtil.jsonCharFilter(nc.getTitle()));
+					item.element("pic",
+							StringUtils.trim(articleUtil.getPicTermUrlBySize(nc.getOrigPicUrl(), imgSize, 1.1)));
+					item.element("url", "photo://1_" + newsId + ".xml");
+					items.add(item);
+				}
+				commentJson.element("hots", items);
+			}
+			RenderUtil.renderJson(response, callback + "(" + commentJson.toString() + ")");
+			if (clientNewsCache != null)
+				clientNewsCache.set(key, NEWS_CONTENT_EXPIRE_TIME, callback + "(" + commentJson.toString() + ")");
+		}
+		return null;
+	}
+
+	private String getGalleryKey(int id, int termId, int subId, String imgSize, String rt) {
+		StringBuilder builder = new StringBuilder();
+		builder.append("photo_");
+		builder.append(id);
+		builder.append("_");
+		builder.append(termId);
+		builder.append("_");
+		builder.append(subId);
+		builder.append("_");
+		builder.append(imgSize);
+		builder.append("_");
+		builder.append(rt);
+		builder.append("_");
+		builder.append("v5");
+		String key = builder.toString();
+		return key;
+	}
+
+	private String getGalleryKeyByRecommandGroupPic(int gid, String imgSize, String rt) {
+		StringBuilder builder = new StringBuilder();
+		builder.append("photo_");
+		builder.append(imgSize);
+		builder.append("_");
+		builder.append(rt);
+		builder.append("_");
+		builder.append(gid);
+		builder.append("_");
+		builder.append("v1");
+		String key = builder.toString();
+		return key;
+	}
+
+	/**
+	 * 获取组图信息<BR>
+	 * 针对客户端协议版本号 小于5的处理
+	 * @param request
+	 * @param response
+	 */
+	private void galleryByProtocal4(HttpServletRequest request, HttpServletResponse response) {
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		String imgSize = HttpUtil.getRequestString(request, "imgSize", "2");
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		String rt = HttpUtil.getRequestString(request, "rt");
+
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		imgSize = getPicGroupType(clientUser, sid, imgSize);
+
+		String key = this.getGalleryKey(id, termId, subId, imgSize, rt);
+
+		String returnValue = null;
+		if (clientNewsCache != null) {
+			returnValue = (String) clientNewsCache.get(key);
+		}
+
+		if (StringUtils.isNotEmpty(returnValue)) {
+			if ("json".equalsIgnoreCase(rt)) {
+				RenderUtil.renderJson(response, returnValue);
+			} else {
+				RenderUtil.renderXml(response, returnValue);
+			}
+		} else {
+			// memcache没有命中
+			logger.info("photo not in memcache" + "\t" + key);
+			NewsContent nc = newsService.getNewsContentNoCache(id);
+			String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId));
+			NewsContent[] newsContentContext = newsService.getNewsContent(pubIds, pageId, termId, fetchRuleId, id,
+					"photo");
+			if (termId > 0) {
+				nc = publicationService.getNewsContentProductInfo(termId, nc);
+			}
+			int expireTime = NEWS_CONTENT_EXPIRE_TIME;
+			if ("json".equalsIgnoreCase(rt)) {
+				String jsonString = getPhotoJSon(termId, nc, imgSize, newsContentContext, null);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, jsonString);
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				String xmlString = getPhotoXml(termId, nc, imgSize, newsContentContext, null);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, xmlString);
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+	}
+
+	/**
+	 * 获取组图信息<BR>
+	 * 针对客户端协议版本号大于或等于5 的处理
+	 * @param request
+	 * @param response
+	 */
+	private void galleryByProtocal5(HttpServletRequest request, HttpServletResponse response) {
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		String imgSize = HttpUtil.getRequestString(request, "imgSize", "2");
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int gid = HttpUtil.getRequestInt(request, "gid", 0);
+		int moreCount = HttpUtil.getRequestInt(request, "moreCount", 0);// 更多推荐的数量
+		long cid = ClientUtil.getCidFromRequest(request);
+		String rt = HttpUtil.getRequestString(request, "rt");
+
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		imgSize = getPicGroupType(clientUser, sid, imgSize);
+
+		String key = null;
+		if (gid > 0) {
+			key = this.getGalleryKeyByRecommandGroupPic(gid, imgSize, rt);
+		} else {
+			key = this.getGalleryKey(id, termId, subId, imgSize, rt);
+		}
+
+		String returnValue = null;
+		if (clientNewsCache != null) {
+			returnValue = (String) clientNewsCache.get(key);
+		}
+
+		GroupInfo groupPicInfo = groupPicService.getGroupInfo(gid);
+		int isLike = this.groupPicService.getLikeCount(gid, cid);
+		int likeCount = this.groupPicService.getLikeCount(gid);
+		String likeXml = null, likeJson = null;
+		// 获取推荐组图列表
+		List<GroupPicInfo> moreGroupPicList = groupPicService.next(cid, gid, id, moreCount);
+		String picJson = null;
+		String picXml = null;
+		
+		if ("json".equalsIgnoreCase(rt)) {
+			picJson = this.groupPicListJson(moreGroupPicList);
+			likeJson = "\"isLike\":\"" + isLike + "\",\"likeCount\":\"" + likeCount + "\"";
+		} else {
+			picXml = this.groupPicListXml(moreGroupPicList);
+			likeXml = "<isLike>" + isLike + "</isLike><likeCount>" + likeCount + "</likeCount>";
+		}
+
+		if (StringUtils.isNotEmpty(returnValue)) {
+			if ("json".equalsIgnoreCase(rt)) {
+				returnValue = returnValue.substring(0, returnValue.length() - 1).concat(",").concat(picJson).concat(returnValue.substring(returnValue.length() - 1));
+				// 是否喜欢 和 喜欢数量
+				returnValue = returnValue.substring(0, returnValue.length() - 1).concat(",").concat(likeJson).concat(returnValue.substring(returnValue.length() - 1));
+				RenderUtil.renderJson(response, returnValue);
+			} else {
+				returnValue = returnValue.replace("</root>", picXml + "</root>");
+				// 是否喜欢 和 喜欢数量
+				returnValue = returnValue.replace("</root>", likeXml + "</root>");
+				RenderUtil.renderXml(response, returnValue);
+			}
+		} else {
+			// memcache没有命中
+			logger.info("photo not in memcache" + "\t" + key);
+			NewsContent nc = newsService.getNewsContentNoCache(id);
+			String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId));
+			NewsContent[] newsContentContext = newsService.getNewsContent(pubIds, pageId, termId, fetchRuleId, id, "photo");
+			if (termId > 0) {
+				nc = publicationService.getNewsContentProductInfo(termId, nc);
+			}
+			int expireTime = NEWS_CONTENT_EXPIRE_TIME;
+			if ("json".equalsIgnoreCase(rt)) {
+				String jsonString = getPhotoJSon(termId, nc, imgSize, newsContentContext, groupPicInfo);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, jsonString);
+
+				jsonString = jsonString.substring(0, jsonString.length() - 1).concat(",").concat(picJson).concat(jsonString.substring(jsonString.length() - 1));
+				// 是否喜欢 和 喜欢数量
+				jsonString = jsonString.substring(0, jsonString.length() - 1).concat(",").concat(likeJson).concat(jsonString.substring(jsonString.length() - 1));
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				String xmlString = getPhotoXml(termId, nc, imgSize, newsContentContext, groupPicInfo);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, xmlString);
+				xmlString = xmlString.replace("</root>", picXml + "</root>");
+				// 是否喜欢 和 喜欢数量
+				xmlString = xmlString.replace("</root>", likeXml + "</root>");
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+	}
+
+	private String groupPicListJson(List<GroupPicInfo> list) {
+		JSONObject json = new JSONObject();
+
+		List<JSONObject> gpJsonList = new ArrayList<JSONObject>();
+		for (GroupPicInfo obj : list) {
+			JSONObject gpJson = new JSONObject();
+			gpJson.element("id", String.valueOf(obj.getId()));
+			gpJson.element("title", obj.getTitle());
+			gpJson.element("pic", obj.getPic());
+
+			gpJsonList.add(gpJson);
+		}
+
+		json.element("more", gpJsonList);
+
+		String result = json.toString();
+
+		return result.substring(1, result.length() - 1);
+	}
+
+	public String groupPicListXml(List<GroupPicInfo> list) {
+		Element moreEl = DocumentHelper.createElement("more");
+		for (GroupPicInfo obj : list) {
+			moreEl.add(obj.toElement());
+		}
+		return moreEl.asXML();
+	}
+
+	@RequestMapping(value = "/news/photoHtml.go")
+	public String photoHtml(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+		int imgPageNum = HttpUtil.getRequestInt(request, "p", 1);// 第几页图片
+		int pageNum = HttpUtil.getRequestInt(request, "pageNum", 0);
+		int newsType = HttpUtil.getRequestInt(request, "newsType", 0);
+		String imgSize = HttpUtil.getRequestString(request, "imgSize", "2");
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		String title = HttpUtil.getRequestString(request, "title", "更多新闻");
+		imgSize = getPicGroupType(clientUser, sid, imgSize);
+		int pageCount = 0;
+		int isLastPage = 0;
+		Image show_image = null;
+		String imageUrl = "";
+		NewsContent nc = newsService.getNewsContent(newsId);
+		News news = nc.getNews();
+		ArticleUtil articleUtil = new ArticleUtil();
+		if (news != null && news.getContentPic() != null && news.getContentPic().size() > 0) {
+			List<Image> img_list = news.getContentPic();
+			if (img_list != null && img_list.size() > 0) {
+				pageCount = img_list.size();
+				if (imgPageNum >= img_list.size()) {
+					isLastPage = 1; // 是否最后一页
+					imgPageNum = img_list.size();
+				}
+				if (imgPageNum <= img_list.size()) {
+					if (imgPageNum > 0) {
+						show_image = img_list.get(imgPageNum - 1);// 当前页图片
+					} else {
+						show_image = img_list.get(imgPageNum);
+					}
+				}
+			}
+
+			imageUrl = articleUtil.getImageUrlBySize(show_image.getUrl(), imgSize);// 图片适配
+		}
+
+		model.addAttribute("sid", sid);
+		model.addAttribute("pubId", pubId);
+		model.addAttribute("pageId", pageId);
+		model.addAttribute("NewsId", newsId);
+		model.addAttribute("PN", imgPageNum + 1);// 代表下一页的序列号（从0开始）和当前页数（从1开始）
+		model.addAttribute("CurrentPage", imgPageNum);
+		model.addAttribute("PCount", pageCount);
+		model.addAttribute("IsLastPage", isLastPage);
+		model.addAttribute("ShowImage", show_image);
+		model.addAttribute("imageUrl", imageUrl);
+		model.addAttribute("title", title);
+
+		model.addAttribute("pageNum", pageNum);
+		model.addAttribute("termId", termId);
+		model.addAttribute("NewsType", newsType);
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "rollingnews/photoLow";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH) {
+				return "rollingnews/photoTouch";
+			}
+		} catch (Exception e) {
+		}
+		return "rollingnews/photo";
+	}
+	
+	/**
+	 * 获取组图类型 和 tag 列表
+	 * @param model
+	 * @param request
+	 * @param response
+	 */
+	@RequestMapping(value = "/photos/keywords.go")
+	public void keywords(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		// TODO: 提供测试版本数据  2012年3月26日15时17分18秒
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		String rt = HttpUtil.getRequestString(request, "rt", "json");
+		List<GroupPicCategory> clist = this.groupPicService.getGroupPicCategoryList();
+		List<TagInfo> tlist = this.groupPicService.getTagInfoList(0, 20);
+		
+		if (rt != null && rt.equalsIgnoreCase("json")) {
+			//　以json方式返回数据
+			JSONObject root = new JSONObject();
+			JSONArray arr = new JSONArray();
+			if (clist != null && clist.size() > 0) {
+				JSONObject jso = null;
+				for(GroupPicCategory gpc : clist) {
+					jso = new JSONObject();
+					jso.element("id", gpc.getId());
+					jso.element("name", gpc.getName());
+					jso.element("icon", gpc.getIcon());
+					arr.add(jso);
+				}
+			}
+			root.element("categories", arr);
+			arr = new JSONArray();
+			if (tlist != null && tlist.size() > 0) {
+				JSONObject jso = null;
+				
+				for(TagInfo tag : tlist) {
+					jso = new JSONObject();
+					jso.element("id", tag.getId());
+					jso.element("name", tag.getTagName());
+					arr.add(jso);
+				}
+				root.element("tags", arr);
+			}
+			RenderUtil.renderJson(response, root.toString());
+		} else {
+			// 以xml方式返回数据
+			Document doc = DocumentHelper.createDocument();
+			doc.setXMLEncoding("UTF-8");
+			Element root = doc.addElement("root");
+			Element categories = root.addElement("categories");
+			if (clist != null && clist.size() > 0) {
+				Element categorie = null;
+				for(GroupPicCategory gpc : clist) {
+					categorie = categories.addElement("category");
+					Dom4jUtils.addElement(categorie, "id", String.valueOf(gpc.getId()));
+					Dom4jUtils.addElement(categorie, "name", gpc.getName());
+					Dom4jUtils.addElement(categorie, "icon", gpc.getIcon());
+				}
+			}
+			Element tags = root.addElement("tags");
+			if (tlist != null && tlist.size() > 0) {
+				Element tagElement = null;
+				for(TagInfo tag : tlist) {
+					tagElement = tags.addElement("tag");
+					Dom4jUtils.addElement(tagElement, "id", String.valueOf(tag.getId()));
+					Dom4jUtils.addElement(tagElement, "name", tag.getTagName());
+				}
+			}
+			RenderUtil.renderXml(response, doc.asXML());
+		}
+	}
+	
+	@RequestMapping(value = "/photos/list.go")
+	public void list(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		// TODO: 提供测试版本的数据 2012年3月27日16时08分51秒
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		String rt = HttpUtil.getRequestString(request, "rt", "json");
+		int categoryId = HttpUtil.getRequestInt(request, "categoryId", 0);
+		int tagId = HttpUtil.getRequestInt(request, "tagId", 0);
+		int startId = HttpUtil.getRequestInt(request, "startId", 0);
+		int pageSize = HttpUtil.getRequestInt(request, "pageSize", 10);
+
+		// 如果categoryId 和 tagId 都为0, 那么取热门分类下的组图
+		List<GroupInfoVo> l = this.groupPicService.getGroupInfoList(tagId, categoryId);
+		if (rt != null && rt.equalsIgnoreCase("json")) {
+			// 　以json方式返回数据
+			JSONArray arr = new JSONArray();
+			JSONObject jso = null;
+			JSONArray imageArr = null;
+			for (GroupInfoVo gvo : l) {
+				jso = new JSONObject();
+				jso.element("newsId", gvo.getNewsId());
+				jso.element("title", gvo.getTitle());
+				jso.element("time", gvo.getTime().getTime());
+				jso.element("commentNum", gvo.getCommentNum());
+				jso.element("favoriteNum", gvo.getFavoriteNum());
+				jso.element("imageNum", gvo.getImageNum());
+
+				imageArr = new JSONArray();
+				for (String url : gvo.getImageList()) {
+					imageArr.add(SysConfig.IMAGE_SERVER + url);
+				}
+				jso.element("images", imageArr);
+
+				arr.add(jso);
+			}
+			RenderUtil.renderJson(response, arr.toString());
+		} else {
+			// 以xml方式返回数据
+			Document doc = DocumentHelper.createDocument();
+			doc.setXMLEncoding("UTF-8");
+			Element root = doc.addElement("root");
+			Element news = null;
+			for (GroupInfoVo gvo : l) {
+				news = root.addElement("news");
+				Dom4jUtils.addElement(news, "newsId", String.valueOf(gvo.getNewsId()));
+				Dom4jUtils.addElement(news, "title", gvo.getTitle());
+				Dom4jUtils.addElement(news, "time", String.valueOf(gvo.getTime().getTime()));
+				Dom4jUtils.addElement(news, "commentNum", String.valueOf(gvo.getCommentNum()));
+				Dom4jUtils.addElement(news, "favoriteNum", String.valueOf(gvo.getFavoriteNum()));
+				Dom4jUtils.addElement(news, "imageNum", String.valueOf(gvo.getImageNum()));
+				Element images = news.addElement("images");
+				for (String url : gvo.getImageList()) {
+					Dom4jUtils.addElement(images, "image", SysConfig.IMAGE_SERVER + url);
+				}
+			}
+			RenderUtil.renderXml(response, doc.asXML());
+		}
+
+	}
+
+	/**
+	 * 喜欢组图
+	 * @param model
+	 * @param request
+	 * @param response
+	 */
+	@RequestMapping(value = "/photos/like.go")
+	public void like(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		int gid = HttpUtil.getRequestInt(request, "gid", 0);
+		String rt = HttpUtil.getRequestString(request, "rt", "json");
+		int i = this.groupPicService.likeGroupPic(gid, clientUser.getCid());
+		String result;
+
+		String status = null, msg = null;
+		if (i == 1) {
+			status = "1";
+			msg = "提交成功";
+		} else if (i == -1) {
+			status = "-1";
+			msg = "重复提交";
+		} else {
+			status = "0";
+			msg = "提交失败";
+		}
+		if (rt.equals("json")) {
+			result = new JSONObject().element("status", status).element("msg", msg).toString();
+			RenderUtil.renderJson(response, result);
+		} else {
+			result = "<root><result><status>" + status + "</status><msg>" + msg + "</msg></result></root>";
+			RenderUtil.renderXml(response, result);
+		}
+
+	}
+	
+	private GalleryModel getGalleryModel(NewsContent newsContent, String imgSize, NewsContent[] newsContext,
+			GroupInfo group) {
+		GalleryModel gallery = null;
+
+		if (group != null) {
+			gallery = this.getGalleryModelByGroupInfo(group, imgSize);
+		} else {
+			gallery = this.getGalleryModelByNewsContent(newsContent, imgSize, newsContext);
+		}
+
+		return gallery;
+	}
+
+	private GalleryModel getGalleryModelByGroupInfo(GroupInfo group, String imgSize) {
+		GalleryModel gallery = new GalleryModel();
+		gallery.setType("组图");
+
+		ArticleUtil articleUtil = new ArticleUtil();
+		String ptitle = group.getTitle();
+		List<PhotoModel> photoList = new ArrayList<PhotoModel>();
+
+		try {
+			int i = 0;
+			for (GroupPic pic : group.getPicList()) {
+				PhotoModel pm = new PhotoModel();
+				pm.setPic(StringUtils.trim(articleUtil.getImageUrlBySize(pic.getUrl(), imgSize)));
+				if (pm.getPic().endsWith("php")) {
+					continue;
+				}
+				pm.setPtitle(group.getTitle());
+				pm.setAbstract(pic.getDesc());
+				pm.setShareLink("http://3g.k.sohu.com/t/p" + group.getGid() + "_" + (++i));
+				pm.setWidth(String.valueOf(pic.getWidth()));
+				pm.setHeight(String.valueOf(pic.getHeight()));
+				photoList.add(pm);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		gallery.setNewsId("0");
+		gallery.setGid(String.valueOf(group.getGid()));
+		gallery.setTitle(ptitle);
+		gallery.setTime(DateUtil.getDate(group.getModifyTime(), "yyyy-MM-dd"));
+		gallery.setDigNum("0");
+		gallery.setShareLink("http://3g.k.sohu.com/t/p" + group.getGid());
+
+		// TODO 评论部分，处理
+		/*
+		 * if (newsContent.getNid() > 0) { String commentNewsId =
+		 * newsCommentService.getCommentNewsId(newsContent); int count =
+		 * newsCommentService.getCommentCount(commentNewsId);
+		 * gallery.setCommentNum(String.valueOf(count)); } else {
+		 * gallery.setCommentNum("-1"); }
+		 */
+
+		StringBuilder builder = new StringBuilder();
+		builder.append(ptitle);
+		builder.append(" ").append(gallery.getShareLink());
+		builder.append(" @搜狐新闻客户端");
+
+		gallery.setShareContent(builder.toString());
+		gallery.setPhotoList(photoList);
+
+		return gallery;
+	}
+
+	private GalleryModel getGalleryModelByNewsContent(NewsContent newsContent, String imgSize, NewsContent[] newsContext) {
+		GalleryModel gallery = new GalleryModel();
+		gallery.setType("组图");
+		if (newsContent.getIsDelete() == 1) {
+			newsContent.setContent("该新闻已删除");
+			newsContent.getNews().setLongTitle("该新闻已删除");
+			newsContent.setTitle("该新闻已删除");
+			newsContent.getNews().setContent("该新闻已删除");
+			newsContent.getNews().setAbstract("该新闻已删除");
+		}
+		ArticleUtil articleUtil = new ArticleUtil();
+		String ptitle = null;
+		List<PhotoModel> photoList = new ArrayList<PhotoModel>();
+
+		String abstractContent = newsContent.getNews().getAbstract();
+
+		if (StringUtils.isNotBlank(newsContent.getTitle())) {
+			ptitle = (newsContent.getTitle());
+		} else if (StringUtils.isNotBlank(newsContent.getNews().getShortTitle())) {
+			ptitle = (newsContent.getNews().getShortTitle());
+		}
+
+		gallery.setNewsId(String.valueOf(newsContent.getId()));
+		gallery.setGid("0");
+		gallery.setShareLink("http://3g.k.sohu.com/t/n" + newsContent.getId());
+		gallery.setTitle(ptitle);
+		gallery.setTime(DateUtil.getDate(newsContent.getCreateTime(), "yyyy-MM-dd HH:ss"));
+		gallery.setDigNum("0");
+		gallery.setShareLink("http://3g.k.sohu.com/t/n" + newsContent.getId());
+
+		if (newsContent.getNews() != null && newsContent.getNews().getMedia() != null) {
+			gallery.setFrom(newsContent.getNews().getMedia());
+		}
+		if (newsContent.getNid() > 0) {
+			String commentNewsId = newsCommentService.getCommentNewsId(newsContent);
+			int count = newsCommentService.getCommentCount(commentNewsId);
+			gallery.setCommentNum(String.valueOf(count));
+		} else {
+			gallery.setCommentNum("-1");
+		}
+
+		StringBuilder builder = new StringBuilder();
+		builder.append(ptitle);
+		if (abstractContent != null && abstractContent.trim().length() > 0) {
+			builder.append(" ");
+			String abstractTemp = ClientUtil.clearAllHtmlTag(StringEscapeUtils.unescapeHtml(abstractContent.trim()));
+			if (abstractTemp.length() < 60) {
+				builder.append(abstractTemp);
+			} else {
+				builder.append(abstractTemp.substring(0, 60)).append("……");
+			}
+		}
+		builder.append(" ").append(gallery.getShareLink());
+		if (newsContent.getProductId() == 1) {
+			builder.append(" @搜狐新闻客户端");
+		}
+		gallery.setShareContent(builder.toString());
+
+		for (int i = 0; i < newsContent.getNews().getContentPic().size(); i++) {
+			Image image = newsContent.getNews().getContentPic().get(i);
+			PhotoModel pm = new PhotoModel();
+			pm.setPic(StringUtils.trim(articleUtil.getImageUrlBySize(image.getUrl(), imgSize)));
+			if (pm.getPic().endsWith("php")) {
+				continue;
+			}
+			pm.setPtitle(image.getAlt());
+			pm.setAbstract(image.getDescription());
+			pm.setShareLink("http://3g.k.sohu.com/t/n" + newsContent.getId() + "_" + (i + 1));
+			pm.setWidth("0");
+			pm.setHeight("0");
+			photoList.add(pm);
+		}
+		gallery.setPhotoList(photoList);
+
+		if (newsContext != null && newsContext.length == 2 && newsContext[1] != null) {
+			NewsContent tn = newsContext[1];
+			gallery.setNextName(tn.getTitle());
+			gallery.setNextId(String.valueOf(tn.getId()));
+		}
+		if (newsContext != null && newsContext.length == 2 && newsContext[0] != null) {
+			NewsContent tn = newsContext[0];
+			gallery.setPreId(String.valueOf(tn.getId()));
+			gallery.setPreName(tn.getTitle());
+		}
+
+		return gallery;
+	}
+
+	private String getPhotoJSon(int termId, NewsContent newsContent, String imgSize, NewsContent[] termNewsContext,
+			GroupInfo group) {
+		GalleryModel galleryModel = getGalleryModel(newsContent, imgSize, termNewsContext, group);
+
+		JSONObject jsonObject = new JSONObject();
+		jsonObject.put("newsId", galleryModel.getNewsId());
+		jsonObject.put("gid", galleryModel.getGid());
+		jsonObject.put("termId", String.valueOf(termId));
+		jsonObject.put("type", galleryModel.getType());
+		jsonObject.put("title", galleryModel.getTitle());
+		jsonObject.put("time", galleryModel.getTime());
+		jsonObject.put("from", galleryModel.getFrom());
+
+		jsonObject.put("commentNum", galleryModel.getCommentNum());
+		jsonObject.put("digNum", galleryModel.getDigNum());
+
+		jsonObject.put("shareLink", galleryModel.getShareLink());
+		jsonObject.put("shareContent", galleryModel.getShareContent());
+
+		jsonObject.element("gallery", galleryModel.getPhotoList());
+
+		jsonObject.put("nextName", galleryModel.getNextName());
+		jsonObject.put("nextId", galleryModel.getNextId());
+		jsonObject.put("preName", galleryModel.getPreName());
+		jsonObject.put("preId", galleryModel.getPreId());
+		return jsonObject.toString();
+	}
+
+	private String getPhotoXml(int termId, NewsContent newsContent, String imgSize, NewsContent[] termNewsContext,
+			GroupInfo group) {
+
+		GalleryModel galleryModel = getGalleryModel(newsContent, imgSize, termNewsContext, group);
+
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Dom4jUtils.addElement(rootElement, "newsId", galleryModel.getNewsId());
+		Dom4jUtils.addElement(rootElement, "gid", galleryModel.getGid());
+		Dom4jUtils.addElement(rootElement, "termId", String.valueOf(termId));
+		Dom4jUtils.addElement(rootElement, "type", galleryModel.getType());
+		Dom4jUtils.addCDATAElement(rootElement, "title", galleryModel.getTitle());
+		Dom4jUtils.addElement(rootElement, "time", galleryModel.getTime());
+		Dom4jUtils.addElement(rootElement, "from", galleryModel.getFrom());
+		Dom4jUtils.addElement(rootElement, "commentNum", galleryModel.getCommentNum());
+		Dom4jUtils.addElement(rootElement, "digNum", galleryModel.getDigNum());
+		Dom4jUtils.addElement(rootElement, "shareLink", galleryModel.getShareLink());
+		Dom4jUtils.addCDATAElement(rootElement, "shareContent", galleryModel.getShareContent());
+
+		Element gelement = rootElement.addElement("gallery");
+		for (int i = 0; i < galleryModel.getPhotoList().size(); i++) {
+			PhotoModel image = galleryModel.getPhotoList().get(i);
+			Element pelement = gelement.addElement("photo");
+			Dom4jUtils.addElement(pelement, "pic", image.getPic());
+			Dom4jUtils.addElement(pelement, "width", image.getWidth());
+			Dom4jUtils.addElement(pelement, "height", image.getHeight());
+			Dom4jUtils.addCDATAElement(pelement, "ptitle", image.getPtitle());
+			// Dom4jUtils.addElement(pelement, "shareLink",
+			// "http://3g.k.sohu.com/t/n" + newsContent.getId() + "_" + (i + 1));
+			Dom4jUtils.addElement(pelement, "shareLink", galleryModel.getShareLink() + "_" + (i + 1));
+			Dom4jUtils.addCDATAElement(pelement, "abstract", image.getAbstract());
+		}
+
+		Dom4jUtils.addCDATAElement(rootElement, "nextName", galleryModel.getNextName());
+		Dom4jUtils.addElement(rootElement, "nextId", galleryModel.getNextId());
+		Dom4jUtils.addCDATAElement(rootElement, "preName", galleryModel.getPreName());
+		Dom4jUtils.addElement(rootElement, "preId", galleryModel.getPreId());
+		return doc.asXML();
+	}
+
+	public String getPicGroupType(ClientUser clientUser, int sid, String imgSize) {
+
+		if (clientUser != null) {
+			if ("640x960".equalsIgnoreCase(clientUser.getResolution())) {
+				return "big620";
+			}
+			ClientAdaptInf cai = clientService.getModelType(clientUser.getCid());
+			if (cai != null) {
+				sid = cai.getId();
+			}
+		}
+		if (sid > 0) {
+			ClientAdaptInf cai = adaptService.getClientAdaptInfById(sid);
+			if (cai != null && StringUtils.isNotBlank(cai.getPicGroupType())) {
+				return cai.getPicGroupType();
+			}
+		}
+		if (StringUtils.isNotBlank(imgSize)) {
+			if ("1".equalsIgnoreCase(imgSize)) {
+				return "small";
+			} else if ("2".equalsIgnoreCase(imgSize)) {
+				return "middle";
+			} else if ("3".equalsIgnoreCase(imgSize)) {
+				return "big";
+			} else if ("org".equalsIgnoreCase(imgSize)) {
+				return "org";
+			} else {
+				return "big";
+			}
+		}
+		return imgSize;
+	}
+
+	public static void main(String[] args) {
+		JSONObject json = new JSONObject();
+
+		List<GroupPicInfo> picList = new ArrayList<GroupPicInfo>();
+		GroupPicInfo gp = new GroupPicInfo();
+		gp.setId(123);
+		gp.setTitle("测试组图推荐");
+		gp.setPic("http://pic.k.sohu.com/img7/adapt/wb/grouppics/2011/12/01/640417090_100_100.jpg");
+		picList.add(gp);
+		picList.add(gp);
+		picList.add(gp);
+		System.out.println(new ClientPhotoController().groupPicListJson(picList));
+	}
+
+	class GalleryModel {
+		private String newsId;
+		private String gid;// 组图Id groupPicId
+		private String type;
+		private String title;
+		private String time;
+		private String from;
+		private String commentNum;
+		private String digNum;
+		private String shareLink;
+		private String shareContent;
+		private List<PhotoModel> photoList;
+		private String nextName;
+		private String nextId;
+		private String preName;
+		private String preId;
+
+		public String getNewsId() {
+			return newsId;
+		}
+
+		public void setNewsId(String newsId) {
+			this.newsId = newsId;
+		}
+
+		public String getGid() {
+			return gid;
+		}
+
+		public void setGid(String gid) {
+			this.gid = gid;
+		}
+
+		public String getTime() {
+			return time;
+		}
+
+		public void setTime(String time) {
+			this.time = time;
+		}
+
+		public String getType() {
+			return type;
+		}
+
+		public void setType(String type) {
+			this.type = type;
+		}
+
+		public String getTitle() {
+			return title;
+		}
+
+		public String getCommentNum() {
+			return commentNum;
+		}
+
+		public void setCommentNum(String commentNum) {
+			this.commentNum = commentNum;
+		}
+
+		public String getDigNum() {
+			return digNum;
+		}
+
+		public void setDigNum(String digNum) {
+			this.digNum = digNum;
+		}
+
+		public void setTitle(String title) {
+			this.title = title;
+		}
+
+		public String getFrom() {
+			return from;
+		}
+
+		public void setFrom(String from) {
+			this.from = from;
+		}
+
+		public List<PhotoModel> getPhotoList() {
+			return photoList;
+		}
+
+		public void setPhotoList(List<PhotoModel> photoList) {
+			this.photoList = photoList;
+		}
+
+		public String getNextName() {
+			return nextName;
+		}
+
+		public void setNextName(String nextName) {
+			this.nextName = nextName;
+		}
+
+		public String getNextId() {
+			return nextId;
+		}
+
+		public void setNextId(String nextId) {
+			this.nextId = nextId;
+		}
+
+		public String getPreName() {
+			return preName;
+		}
+
+		public void setPreName(String preName) {
+			this.preName = preName;
+		}
+
+		public String getPreId() {
+			return preId;
+		}
+
+		public void setPreId(String preId) {
+			this.preId = preId;
+		}
+
+		public String getShareLink() {
+			return shareLink;
+		}
+
+		public void setShareLink(String shareLink) {
+			this.shareLink = shareLink;
+		}
+
+		public String getShareContent() {
+			return shareContent;
+		}
+
+		public void setShareContent(String shareContent) {
+			this.shareContent = shareContent;
+		}
+
+	}
+
+	public class PhotoModel {
+		private String ptitle;
+		private String pic;
+		private String abstractTxt;
+		private String shareLink;
+		private String width;
+		private String height;
+
+		public String toString() {
+			JSONObject json = new JSONObject();
+			json.element("ptitle", JSonUtil.jsonCharFilter(StringUtils.trim(ptitle)));
+			json.element("pic", pic);
+			json.element("width", width);
+			json.element("height", height);
+			json.element("shareLink", shareLink);
+			json.element("abstract", JSonUtil.jsonCharFilter(StringUtils.trim(abstractTxt)));
+			return json.toString();
+		}
+
+		public String getPtitle() {
+			return ptitle;
+		}
+
+		public void setPtitle(String ptitle) {
+			this.ptitle = ptitle;
+		}
+
+		public String getPic() {
+			return pic;
+		}
+
+		public void setPic(String pic) {
+			this.pic = pic;
+		}
+
+		public String getAbstract() {
+			return abstractTxt;
+		}
+
+		public void setAbstract(String abstractTxt) {
+			this.abstractTxt = abstractTxt;
+		}
+
+		public String getShareLink() {
+			return shareLink;
+		}
+
+		public void setShareLink(String shareLink) {
+			this.shareLink = shareLink;
+		}
+
+		public String getWidth() {
+			if (width == null) {
+				width = "0";
+			}
+			return width;
+		}
+
+		public void setWidth(String width) {
+			this.width = width;
+		}
+
+		public String getHeight() {
+			if (height == null) {
+				height = "0";
+			}
+			return height;
+		}
+
+		public void setHeight(String height) {
+			this.height = height;
+		}
+
+	}
+
+}

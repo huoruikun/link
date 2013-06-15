@@ -1,0 +1,36 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ProductShowPub;
+
+@Repository("productShowPubDao")
+public class ProductShowPubDao extends BaseJdbcSupport {
+
+	public List<ProductShowPub> list(int productId, int type){
+		
+		return getJdbcTemplate().query("select * from p_product_show_pub where productId=? and type=?", 
+				new Object[]{productId, type}, 
+				new dataMapper());
+	}
+	
+	class dataMapper implements RowMapper<ProductShowPub>{
+
+		@Override
+		public ProductShowPub mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			ProductShowPub x_ret = new ProductShowPub();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setProductId(rs.getInt("productId"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			x_ret.setType(rs.getInt("type"));			
+			return x_ret;
+		}
+		
+	}
+}

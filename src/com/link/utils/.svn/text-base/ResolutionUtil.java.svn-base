@@ -1,0 +1,29 @@
+package com.wap.sohu.mobilepaper.util;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+
+import com.wap.sohu.mobilepaper.model.ClientMacthRule;
+
+public class ResolutionUtil {
+
+	public static boolean matchResolutionByRule(ClientMacthRule rule,String resolution){
+		boolean hasMatch = false;
+		if((resolution.toLowerCase().equals(rule.getClientResolution().toLowerCase()))){
+			hasMatch = true;
+		}else if(resolution.toLowerCase().startsWith(rule.getClientResolution().toLowerCase())){
+			hasMatch = true;
+		}else if(rule.getClientResolution().contains("-")){
+			int width=NumberUtils.toInt(StringUtils.substringBefore(resolution, "x"),0);
+			String[] ruleWidths = rule.getClientResolution().split("-");
+			if(ruleWidths.length==2){
+				int bWidth = NumberUtils.toInt(ruleWidths[0],0);
+				int eWidth = NumberUtils.toInt(ruleWidths[1],0);
+				if(width>=bWidth&&width<eWidth){
+					hasMatch = true;
+				}
+			}
+		}
+		return hasMatch;
+	}
+}

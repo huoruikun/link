@@ -1,0 +1,60 @@
+/**
+ * 
+ */
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PHoliday;
+import com.wap.sohu.mobilepaper.util.LRUMap;
+
+/**
+ * @author ruikunh
+ *
+ */
+@Repository("pHolidayDao")
+public class PHolidayDao extends BaseJdbcSupport {
+	
+	LRUMap<String, List<PHoliday>> holiday_map = new LRUMap<String, List<PHoliday>>("holiday_map", 3600, 3500);
+	
+	public List<PHoliday> list(){
+		String key = "holidays";
+		List<PHoliday> list = holiday_map.get(key);
+		if(list == null){
+			synchronized (this) {
+				list = holiday_map.get(key);
+				if(list == null){
+					String sql = "select * from p_holiday";
+					list = getJdbcTemplate().query(sql, new rowMapper());
+					
+					//没有配置的时候也进行缓存，防止不断的查询数据库
+					if(list == null){
+						list = new ArrayList<PHoliday>();
+					}
+					holiday_map.put(key, list);
+				}
+			}
+		}
+		return list;
+	}
+	
+	class rowMapper implements RowMapper<PHoliday> {
+
+		@Override
+		public PHoliday mapRow(ResultSet rs, int arg1) throws SQLException {
+			PHoliday x_ret = new PHoliday();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setName(rs.getString("name"));
+			x_ret.setDateStart(rs.getString("dateStart"));
+			x_ret.setDateEnd(rs.getString("dateEnd"));			
+			return x_ret;
+		}
+		
+	}
+}

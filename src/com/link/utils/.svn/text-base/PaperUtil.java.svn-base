@@ -1,0 +1,596 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.PostConstruct;
+
+import net.spy.memcached.CASValue;
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.stereotype.Service;
+
+import com.sohu.wap.sso.util.Md5Util;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.Publication;
+
+@Service
+public class PaperUtil {
+	
+
+	private static final Logger logger = Logger.getLogger(PaperUtil.class);
+	
+	public static String SMS_ALERT_INFO_TITLE = "【接口问题】";
+	public static String SMS_ALERT_INFO_CONTENT = "期刊地址不存在,期刊id=";
+	private static AtomicInteger ZIP_LIST_INDEX = new AtomicInteger(0);
+	private static int ZIP_LIST_SIZE = SysConfig.ZIP_IPS.size();
+	private static Map<String,Integer> ERROR_IP_INFO  = new ConcurrentHashMap<String,Integer>();
+	
+	private static LRUMap<String,List<String>> urlMap = new LRUMap<String,List<String>>("urlmap",60,600); //key:maps
+	
+	public static MemcachedClientIF mc = MemcachedManager.getInstance().getMemcachedClient("real_time_lock");
+	
+	private static LRUMap<String,Object> LOCK_CACHE = new LRUMap<String, Object>("lock_cache",60,120);//本地存放打包成功的zip object=1
+	
+	private static CopyOnWriteArrayList<String> LOCK_LIST = new CopyOnWriteArrayList<String>(); //List始终没有成功，用于重发打包请求
+	
+	private static final int exp_time =  60*60*24*20;
+	
+	private static final int zip_exp_time = 10000;
+	
+	@PostConstruct
+	public void onStart() {
+		new Thread(){
+			public void run(){
+				System.out.println("----------------------run getMemCacheDeamo-------------");
+				while(true){
+					try {
+						batchMemCacheTask();
+						Thread.sleep(100);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}.start();
+	}
+	
+	/**
+	 * 发送多个key，
+	 */
+	private static void batchMemCacheTask(){
+		if(LOCK_LIST.size()>0){
+			Map<String,Object> values = mc.getBulk(LOCK_LIST);
+			for(Map.Entry<String,Object> entry: values.entrySet()) {  
+				LOCK_CACHE.put(entry.getKey(),entry.getValue());
+				if(entry.getValue() !=null && entry.getValue().equals("1")) //移除成功打包的，
+					LOCK_LIST.remove(entry.getKey());
+			}  
+		}
+	}
+	
+	public static String getDownloadIP(){
+		int r = new Random().nextInt(SysConfig.DOWNLOAD_IPS.size());
+		return SysConfig.DOWNLOAD_IPS.get(r);
+	}
+	
+	public static String getURL(String ip,int pubId,long termId,Date date,int modelType,int cityCode,String suffix,int zipPolicy) {
+//		long st = System.currentTimeMillis();
+		
+		String key  = "/mpaper/"+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"/"+suffix;
+		
+//		System.out.println("--------------b c c 0--  " +(System.currentTimeMillis() - st )+"ms");
+		
+		boolean isOk = requestZipServer(key);
+		
+//		System.out.println("--------------b c c 0--++  " +(System.currentTimeMillis() - st )+"ms");
+		
+		if(!isOk)
+			return null;
+
+		return "http://"+ip+key;
+	}
+	
+	public static String getZipURLKey(int pubId,long termId,Date date,int modelType,int cityCode,String suffix,int zipPolicy, long mapId  , int platformId , int selfVersion,int weatherCode) {
+		String key  = "/mpaper/"+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"_"+mapId+"_"+selfVersion+"_"+platformId+"_"+weatherCode+"/"+suffix;
+		return key;
+	}
+	
+	public static String getURL(String ip,int pubId,long termId,Date date,int modelType,int cityCode,String suffix,int zipPolicy, long mapId  , int platformId , int selfVersion,int weatherCode) {
+//		long st = System.currentTimeMillis();
+		
+		String key  =getZipURLKey( pubId, termId, date, modelType, cityCode, suffix, zipPolicy, mapId, platformId, selfVersion, weatherCode);
+		
+//		System.out.println("--------------b c c 0--  " +(System.currentTimeMillis() - st )+"ms");
+		
+		boolean isOk = requestZipServer(key);
+		
+//		System.out.println("--------------b c c 0--++  " +(System.currentTimeMillis() - st )+"ms");
+		
+		if(!isOk)
+			return null;
+
+		return "http://"+ip+key;
+	}
+	
+	public static String getURL(long cid, String ip,int pubId,long termId,Date date,int modelType,int cityCode,String suffix,int zipPolicy, long mapId) {
+//		long st = System.currentTimeMillis();
+		
+		String key  = "/mpaper/"+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"_"+mapId+"/"+suffix;
+		
+//		System.out.println("--------------b c c 0--  " +(System.currentTimeMillis() - st )+"ms");
+		
+		boolean isOk = requestZipServer(key);
+		
+//		System.out.println("--------------b c c 0--++  " +(System.currentTimeMillis() - st )+"ms");
+		
+		if(!isOk)
+			return null;
+
+		return "http://"+ip+key;
+	}
+	
+	
+	public static String getURLNew(String ip,int pubId,long termId,Date date,int modelType,int cityCode,String suffix,int zipPolicy) {
+//		long st = System.currentTimeMillis();
+		
+		String key  = "/mpaper/"+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"_"+modelType+"/"+suffix;
+		
+//		System.out.println("--------------b c c 0--  " +(System.currentTimeMillis() - st )+"ms");
+		
+		boolean isOk = requestZipServer(key);
+		
+//		System.out.println("--------------b c c 0--++  " +(System.currentTimeMillis() - st )+"ms");
+		
+		if(!isOk)
+			return null;
+
+		return "http://"+ip+key;
+	}
+	
+	public static String getURL(int pubId,long termId,Date date,int modelType,int cityCode,String suffix , int zipPolicy , Long mapId , int platformId , int selfVersion , int weatherCode) {
+		String key  = "/mpaper/"+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"_"+mapId+"_"+selfVersion+"_"+platformId+"_"+weatherCode+"/"+suffix;
+		boolean isOk = requestZipServer(key);
+		if(!isOk)
+			return null;
+		
+		String md5Key = Md5Util.MD5Encode(key);
+		List<String> ips = urlMap.get(md5Key);
+		if(ips ==null){ 
+			ips = new ArrayList<String>();
+			for(String ip:SysConfig.DOWNLOAD_IPS){
+				if(HttpUtil.openUrl("http://"+ip+key) == false){
+					Integer info = ERROR_IP_INFO.get(ip); //出错统计
+					if(info !=null){
+						if(info>10){
+							PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,PaperUtil.SMS_ALERT_INFO_CONTENT+pubId);//加入出错机制处理
+						}
+						ERROR_IP_INFO.put(ip, info++);
+					}else{
+						ERROR_IP_INFO.put(ip,1);
+					}	
+				}else{
+					ips.add(ip);
+				}
+			}
+			urlMap.put(md5Key,ips);
+		}
+		
+		int size = ips.size();
+		if(size>0){
+			int index = new Random().nextInt(size);
+			String ip = ips.get(index);
+			if(StringUtils.isEmpty(ip)){
+				return null;
+			}
+			return "http://"+ip+key;
+		}
+		return null;
+	}
+	
+	public static boolean requestZipServer(String key){
+		boolean isOk = true;
+		
+		
+		Object object = LOCK_CACHE.get(key);
+		
+//		System.out.println("--------------b c c 0-0-0  object="+object+"= " +(System.currentTimeMillis() - st )+"ms");
+		
+		if(object !=null && object.equals("1")){
+			
+//			System.out.println("--------------b c c 0  " +(System.currentTimeMillis() - st )+"ms");
+			
+			return isOk;
+		}
+		
+		
+		object = getMcValue(key); 
+		if(object !=null && object.equals("1")){
+			LOCK_CACHE.put(key, object);
+			return isOk;
+		}
+		System.out.println("--------------b c c 00 ooo object=" +object);
+		
+		long st = System.currentTimeMillis();
+		
+/*//	System.out.println("--------------b c c 00 ooo object=" +object);
+		
+//		System.out.println("--------------b c c 00  " +(System.currentTimeMillis() - st )+"ms");
+*/		
+		if(object ==null){
+			String zipIp  = getZipIP(null);
+			System.out.println("----------- zipIp=="+zipIp);
+			Future<Boolean> fu = mc.add(key,exp_time,zipIp+"_"+(System.currentTimeMillis()+zip_exp_time));
+			try {
+				Boolean result = fu.get(1000, TimeUnit.MILLISECONDS);
+				if(result){ //加锁成功
+					String ip = sendTaskToZipServer(zipIp,key,null);
+					if(!ip.endsWith(zipIp)){//如果当前ip不成功，换到某个ip}
+						System.out.println("================ send ip fail ! ==============ip:"+zipIp);
+						mc.set(key, exp_time, ip+"_"+(System.currentTimeMillis()+zip_exp_time));
+					}	
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+				System.out.println("================ memcache add lock fail! =============="+key);
+			}
+		}else{
+			if(!object.equals("1")){
+				String value = (String)object;
+				String [] v = value.split("_");
+				if(Long.parseLong(v[1])<=System.currentTimeMillis()){ //超时
+					System.out.println("===========memcache time out======key:"+key);
+					zipTimeOut(key, v[0]);
+				}
+			}	
+		}
+		
+//		long t2 = System.currentTimeMillis();
+	
+		
+		if(object ==null || (object !=null && !object.equals("1"))){ 
+			LOCK_LIST.add(key); //加入到定时批量队列
+			if(true){ //add by wangjia 不等待
+				return false;
+			}			
+			object = getLocalCache(key); //轮询取值
+
+			/**
+			for (int i=0;i<SysConfig.ZIP_IPS_SIZE;i++) {
+				long t4 = System.currentTimeMillis();
+				long t5 = System.currentTimeMillis();
+				System.out.println("===================t4:==========="+(t5-t4));
+				if(object !=null && object.equals("1"))
+					break;
+				else{
+					break;
+					//上一个打包服务器，还没有处理完任务
+//					object = getMcValue(key);
+//					if(!object.equals("1")){
+//						System.out.println("--------------one zip server time out-------------");
+//						String val = (String)object;
+//						String [] vArray = val.split("_");
+//						zipTimeOut(key, vArray[0]);
+//					}
+				}	
+//				long t6 = System.currentTimeMillis();
+//				System.out.println("===================t5:==========="+(t6-t4));
+			 ***/
+ 
+//			}
+			
+//			long t3 = System.currentTimeMillis();
+//			System.out.println("===================t2:==========="+(t3-t2));
+			if(!object.equals("1")) //没有打包成功。
+				isOk =false;
+		}
+		 
+		System.out.println("---one zip and use time:"+DateUtil.getDate("")+" "+(System.currentTimeMillis()-st)+",key:"+key);
+		System.out.println("===================isOk:==========="+isOk);
+//		System.out.println("--------------b c c 000  " +(System.currentTimeMillis() - st )+"ms");
+		
+//		System.out.println("------------one zip and use time:"+(System.currentTimeMillis()-st)+",key:"+key);
+		return isOk;
+	}
+	
+	
+	/**
+	 * 返回html 地址
+	 * @param pubId
+	 * @param termId
+	 * @param date
+	 * @param modelType
+	 * @param cityCode
+	 * @param suffix
+	 * @return
+	 */
+	public static String getHtmlUrl(String ip,int pubId,long termId,Date date,
+			int modelType,int cityCode,String suffix , 
+			int zipPolicy,long mapId, int platformId , 
+			int selfVersion,int weatherCode){
+		
+		return ip+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+
+			modelType+"_"+cityCode+"_"+zipPolicy+"_"+mapId+"_"+
+			selfVersion+"_"+platformId+"_"+weatherCode+"/"+suffix;
+	}
+	
+	public static String getHtmlUrlNew(String ip,int pubId,long termId,Date date,
+			int modelType,int cityCode,String suffix , int zipPolicy){
+		return ip+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"_"+zipPolicy+"_"+modelType+"/"+suffix;
+	}
+	
+	public static String getHtmlUrlNew(String ip,int pubId,long termId,Date date,
+			int modelType,int cityCode,String suffix , int zipPolicy, 
+			Publication pub,int pageId, int platformId , int selfVersion){
+		
+		if(pub!=null && pub.getZipArea() == 0){
+			return ip+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_0_"+
+				zipPolicy+"_"+pageId+"_"+selfVersion+"_"+platformId+"/"+suffix;
+		}
+		return ip+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+
+			cityCode+"_"+zipPolicy+"_"+pageId+"_"+selfVersion+"_"+platformId+"/"+suffix;
+	}
+	
+	public static String getHtmlUrl(String ip,int pubId,long termId,Date date,int modelType,int cityCode,String suffix ){
+		return ip+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"/"+suffix;
+	}
+	
+	
+	public static long[] alreadyGetTermIds(String messageClass,String splitFlag) {
+		long[] had = new long[0];
+		if (messageClass.length() > 0) {
+			String messageClassArray[] = messageClass.split("_");
+			if (messageClassArray.length == 2) {
+				String[] termIds = messageClassArray[1].split(splitFlag);
+				had = new long[termIds.length];
+				for (int i = 0; i < termIds.length; i++) {
+					if(StringUtils.isNotEmpty(termIds[i])){
+						try{
+							had[i] = Long.parseLong(termIds[i]);
+						}catch (Exception e) {
+						}
+					}	
+				}
+			}
+		}
+		return had;
+	}
+	
+	public static void alreadyGetTermIdsNew(String messageClass,String splitFlag , ArrayList<Long> had , ArrayList<String> hadMsg) {
+		if (messageClass.length() > 0) {
+			String messageClassArray[] = messageClass.split("_");
+			if (messageClassArray.length == 2) {
+				String[] termIds = messageClassArray[1].split(splitFlag);
+				
+				for (int i = 0; i < termIds.length; i++) {
+					if(StringUtils.isNotEmpty(termIds[i])){
+						try{
+							
+//							System.out.println("ssssssssmsg: termIds[i]"+termIds[i]);
+							
+							if(termIds[i].contains("msg")){ // 短息id
+								hadMsg.add(termIds[i]);
+							}else{
+								had.add(Long.parseLong(termIds[i]));
+							}
+							
+//							System.out.println("ssssssssmsg: hadMsg.size()00"+hadMsg.size());
+							
+						}catch (Exception e) {
+						}
+					}	
+				}
+			}
+		}
+		
+	}
+	
+	public static boolean hasGetNew(long id, ArrayList<Long> had ) {
+		for(Long termId : had){
+			if (termId == id) {
+				return true;
+			}
+		}
+		return false;
+		
+	}
+	
+	public static boolean hasGet(long id, long[] had) {
+		for (long termId : had) {
+			if (termId == id) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 发送短信报警
+	 * @param title
+	 * @param content
+	 * @return
+	 */
+	public static boolean sendMsgAlert(String title,String content){
+		if(true){
+			return true;
+		}
+		
+		if(StringUtils.isEmpty(SysConfig.SMS_ALERT_URL)){
+			System.out.println("SMS_ALERT_URL is not =====================");
+			return false;
+		}	
+		
+		StringBuilder url = new StringBuilder(SysConfig.SMS_ALERT_URL);
+		url.append("?");
+		url.append("t=");
+		
+		try {
+			url.append(URLEncoder.encode(title, "utf-8"));
+			url.append("&c=");
+			url.append(URLEncoder.encode(content, "utf-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return false;
+		}
+		
+		url.append("&id=");
+		url.append(content.hashCode());
+		
+		if(StringUtils.equals(HttpUtil.getUrlContent(url.toString()),"SUCC")){
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * 根据手机系统及版本 取到显示字体大小
+	 * @param platform
+	 * @param platformVersion
+	 * @return
+	 */
+	public static int getFontByPhoneSystem(String platform,String platformVersion){
+		int font = 14;
+		
+		if(StringUtils.isEmpty(platform)){
+			return font;
+		}
+		
+		if(platform.equalsIgnoreCase("iphone") || platform.equalsIgnoreCase("Android")){ //iphone android 高档触屏
+			font = 18;
+		}else if(platform.equalsIgnoreCase("Symbian")){ //symbian 低档触屏
+			if(StringUtils.isNotEmpty(platformVersion) && platformVersion.indexOf("V5") !=-1)
+			   font = 20;
+		}
+		return font;
+	}
+	
+	public static String getZipIpFromList(){
+		System.out.println("");
+		String ip = SysConfig.ZIP_IPS.get(ZIP_LIST_INDEX.get());
+		ZIP_LIST_INDEX.incrementAndGet();
+		if(ZIP_LIST_INDEX.get()>=ZIP_LIST_SIZE)
+			ZIP_LIST_INDEX.set(0);
+		
+		return ip;  
+	}
+	
+	/**
+	 * 随机返回一个打包服务ip
+	 * @return
+	 */
+	public static String getZipIP(List<String> isUsedIPs){
+		int times = 1;
+		Random r = new Random();
+		int index = r.nextInt(SysConfig.ZIP_IPS_SIZE);
+		String ip = SysConfig.ZIP_IPS.get(index);
+		while(isUsedIPs !=null && isUsedIPs !=null && isUsedIPs.indexOf(ip) !=-1 && times<SysConfig.ZIP_IPS_SIZE){
+			index = r.nextInt(SysConfig.ZIP_IPS_SIZE);
+			ip = SysConfig.ZIP_IPS.get(index);
+			times ++ ;
+		}
+		return ip;
+	}
+	
+	
+	
+	
+	
+	/**
+	 * 发送任务到打包服务器
+	 * @param key
+	 * @param isUsedIps 使用过的ip 列表，优先不选择。
+	 * @return
+	 */
+	public static String sendTaskToZipServer(String ip,String key,List<String> isUsedIps){
+		if(ip == null)
+			ip = getZipIP(isUsedIps);
+		
+		String result = httpRequestZip(ip,key);
+		int times = 0;
+		while((result ==null || (result !=null &&  !result.contains("ok"))) && times<ZIP_LIST_SIZE){
+			if(isUsedIps ==null)
+				isUsedIps = new ArrayList<String>();
+			
+			isUsedIps.add(ip);
+			ip = getZipIP(isUsedIps);
+			result = httpRequestZip(ip,key);
+			times++;
+		}
+		return ip;
+	}
+	
+	
+	public static String httpRequestZip(String ip,String key){
+		String url = "http://"+ip+"/packRequest.jsp?packUrl="+key;
+		System.out.println("hrk test===================" + url);
+		return HttpUtil.getUrlContent(url);
+	}
+	
+	
+	public static void zipTimeOut(String key,String usedIp){
+		String [] ips = usedIp.split(","); //已发送过的打包服务列表
+		String ip = sendTaskToZipServer(null,key, new ArrayList<String>(Arrays.asList(ips)));
+		CASValue<Object> val =  mc.gets(key);
+		boolean isUsed = false;
+		for (String p : ips) {
+			if(p.equals(ip))
+				isUsed = true;
+		}
+		System.out.println("zipTimeOut isUsed="+isUsed+"\t"+key+"\t"+val.getCas()+"\t"+usedIp+"_"+(System.currentTimeMillis()+zip_exp_time));
+		if(isUsed){
+			mc.cas(key, val.getCas(), usedIp+"_"+(System.currentTimeMillis()+zip_exp_time)); 
+		}else
+			mc.cas(key, val.getCas(), usedIp+","+ip+"_"+(System.currentTimeMillis()+zip_exp_time));
+	}
+	
+	public static Object getLocalCache(String key){
+		long memExpTime = System.currentTimeMillis()+SysConfig.LOOP_LOCAL_CACHE_TIME;
+		Object object = LOCK_CACHE.get(key);
+		
+		while (object ==null || (object !=null && !object.equals("1") && System.currentTimeMillis()< memExpTime)) { //检查zip是否生成。并超时
+			object = LOCK_CACHE.get(key);
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		return object;
+	}
+	
+	/**
+	 * 通过mc.get 取cache，出异常重试三次
+	 * @param key
+	 * @return
+	 */
+	public static Object getMcValue(String key){
+		Object object = null;
+		try {
+			object = mc.get(key); //超时。错误处理
+		} catch (Exception e) {
+			for (int i = 0; i < 3; i++) {
+				try{
+					object = mc.get(key);
+					if(object !=null)
+						break;
+				}catch(Exception e1){
+				}
+			}
+		}
+		return object;
+	}
+}

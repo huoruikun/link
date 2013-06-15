@@ -1,0 +1,53 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.List;
+
+import org.dom4j.Element;
+
+public final class ElementUtils {
+	
+	public static void addElement(Element el, String name, Object value){
+		if(el!=null){
+			if(name!=null && name.length()>0){
+				if(value!=null){
+					String text = value.toString();
+					if(text.length()>256 || text.contains("<") || text.contains(">")){
+						el.addElement(name).addCDATA(text);
+					}else{
+						el.addElement(name).setText(text);
+					}					
+				}else{
+					el.addElement(name).setText("");
+				}
+			}
+		}
+	}
+	
+	public static String getElemnetText(Element el, String path) {
+		if(el == null && path == null) {
+			return null;
+		}
+		
+		if(path.contains("/")) {
+			List<Element> dataElList = (List<Element>) el.selectNodes(path);
+			
+			if(dataElList != null){
+				return dataElList.get(0).getText();	
+			}
+		}else {
+			Element dataEl = el.element(path);
+			if(dataEl != null){
+				return dataEl.getTextTrim();
+			}
+		}
+		return null;
+	}
+	
+	public static Element getElemnet(Element el, String name) {
+		if(el == null || name == null) {
+			return null;
+		}
+		return el.element(name);
+	}
+	
+}

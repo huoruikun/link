@@ -1,0 +1,350 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.util.Enumeration;
+import java.util.regex.Pattern;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.UserLeaveMessage;
+import com.wap.sohu.mobilepaper.service.IClientService;
+
+@Controller
+public class LeaveMessageController {
+	@Autowired
+	protected IClientService clientService;
+	
+	@RequestMapping(value="/message.go",params="m=save")
+	public String save(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int termId = ParseUtil.paseInt(request.getParameter("termId"), 0);
+		int type = ParseUtil.paseInt(request.getParameter("type"), 0);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);
+		int pageId = ParseUtil.paseInt(request.getParameter("pid"), 0);
+		
+		String content = request.getParameter("content");
+		String phone = request.getParameter("phone");
+		String backUrl = request.getParameter("backUrl");
+		String phoneBrand = request.getParameter("brand");
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		if(StringUtils.isBlank(p1) && StringUtils.isNotBlank(backUrl) && StringUtils.contains(backUrl, "p1=")){
+			 p1=StringUtils.substringAfterLast(backUrl, "p1="); 
+		}
+		try{
+			if(p1!=null){
+				p1 = URLEncoder.encode(p1, "UTF-8");
+			}
+			if(p2!=null){
+				p2 = URLEncoder.encode(p2, "UTF-8");
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+		String imei = null;
+		long cid = 0;
+		int sent = -1; 
+		String version ="";//客户端版本号
+		
+		//获取客户端版本号
+		ClientInstall req_install = (ClientInstall) request.getAttribute("clientInstall");
+		if(req_install!=null){
+			version = req_install.getVersion();
+		}
+		
+		
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");	
+		if(req_user!=null){
+			imei = req_user.getIMEI();
+			cid = req_user.getCid();
+			
+			if(version == null || version.length() == 0) {
+				ClientInstall c_install = req_user.getUserInstallProducIdChannelIdMap().get(productId);
+				if(c_install!=null){
+					version = c_install.getVersion();
+				}
+			}
+		}
+		
+		Pattern phonePattern = Pattern.compile("^1\\d{10}$");
+		if(phone!=null && !phonePattern.matcher(phone).find()){
+			phone = null;
+		}
+		
+		if(content!=null && content.length()>0){
+			if(type <= 0 || type > 0 && clientService.leaveMsgCount(cid, type)==0){
+				UserLeaveMessage msg = new UserLeaveMessage();
+				msg.setContent(content);
+				msg.setCid(cid);
+				msg.setImei(imei);
+				msg.setLeaveTime(System.currentTimeMillis());
+				msg.setPhone(phone);
+				msg.setPubId(pubId);
+				msg.setTermId(termId);
+				msg.setPhoneBrand(phoneBrand);
+				msg.setType(type);
+				msg.setProductId(productId);
+				msg.setVersion(version);
+				sent = clientService.addUserLeaveMessage(msg)?1:-1;
+			}
+		}
+		
+		if(backUrl!=null){
+			try{
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				backUrl = URLEncoder.encode(backUrl, "UTF-8");
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		if(type > 0){
+			try{
+				int infId = (Integer) request.getAttribute("infId");
+				if(infId != SysConfig.MODEL_INFO_ID){
+					if(type > 0){//专题留言
+						if(pageId == 0){
+							return "message/albumMsgOkTouch";
+						}else{
+							return "message/albumMsgOkTouch2";
+						}
+					}
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			if(pageId == 0){
+				return "message/albumMsgOk";
+			}else{
+				return "message/albumMsgOk2";
+			}
+		}
+		//System.out.print("p1"+request.getParameter("p1")+"p2"+request.getParameter("p2")+",imei="+imei+",cid="+cid);
+		return "redirect:mpnws_msg.go?m=edit&sent="+sent+"&backUrl="+backUrl+"&p1="+p1+"&u="+productId;
+	}
+	
+	@RequestMapping(value="/message.go",params="m=edit")
+	public String editNoRet(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:mpnws_msg.go?"+sb.toString();
+	}
+	
+	/**
+	 * 保存留言，现在有3套页面
+	 * 第一套页面：正常的留言流程---pageId(页面中使用pid)
+	 * 第二套页面：活动1流程
+	 * 第三套页面：活动2流程---有时候2个活动交叉进行，所以作此配置
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value="/mpnws_msg.go",params="m=edit")
+	public String edit(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String backUrl = request.getParameter("backUrl");
+		
+		String p1 = request.getParameter("p1");
+		if(StringUtils.isBlank(p1) && StringUtils.isNotBlank(backUrl) && StringUtils.contains(backUrl, "p1=")){
+			 p1=StringUtils.substringAfterLast(backUrl, "p1="); 
+			 if(StringUtils.contains(backUrl, "mpnws_msg.go")&&p1!=null){
+				 backUrl = backUrl+"&p1="+p1;
+			 }
+		}
+		String p2 = request.getParameter("p2");
+		
+		
+		
+		int type = ParseUtil.paseInt(request.getParameter("type"), 0);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		int pageId = ParseUtil.paseInt(request.getParameter("pid"), 0);
+		
+		if(backUrl!=null && backUrl.length()>0){
+			try {
+				model.addAttribute("BackUrl", URLDecoder.decode(backUrl, "UTF-8"));
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+		}
+		model.addAttribute("PubId", request.getParameter("pubId"));
+		model.addAttribute("TermId", request.getParameter("termId"));	
+		try{
+			if(p1!=null){
+				p1 = URLEncoder.encode(p1, "UTF-8");
+			}
+			if(p2!=null){
+				p2 = URLEncoder.encode(p2, "UTF-8");
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+		model.addAttribute("P1", p1);
+		model.addAttribute("P2", p2);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Sent", ParseUtil.paseInt(request.getParameter("sent"), 0));
+		
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId != SysConfig.MODEL_INFO_ID){
+				if(type > 0){//专题留言
+					if(pageId == 0){
+						return "message/albumMsgTouch";
+					}else{
+						return "message/albumMsgTouch2";
+					}
+				}
+				return "message/leaveMessageTouch";
+			}
+		}catch (Exception e) {
+			
+		}
+		if(type > 0){
+			if(pageId == 0){
+				return "message/albumMsg";
+			}else{
+				return "message/albumMsg2";
+			}
+		}
+		return "message/leaveMessage";
+	}
+	
+	/**
+	 * 保存留言，现在有3套页面
+	 * 第一套页面：正常的留言流程---pageId(页面中使用pid)
+	 * 第二套页面：活动1流程
+	 * 第三套页面：活动2流程---有时候2个活动交叉进行，所以作此配置
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value="/mpnws_msg.go",params="m=save")
+	public String saveNew(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int termId = ParseUtil.paseInt(request.getParameter("termId"), 0);
+		int type = ParseUtil.paseInt(request.getParameter("type"), 0);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);
+		int pageId = ParseUtil.paseInt(request.getParameter("pid"), 0);
+		
+		String content = request.getParameter("content");
+		String phone = request.getParameter("phone");
+		String backUrl = request.getParameter("backUrl");
+		String phoneBrand = request.getParameter("brand");
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		try{
+			if(p1!=null){
+				p1 = URLEncoder.encode(p1, "UTF-8");
+			}
+			if(p2!=null){
+				p2 = URLEncoder.encode(p2, "UTF-8");
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+		String imei = null;
+		long cid = 0;
+		int sent = -1; 
+		String version ="";//客户端版本号
+		
+		//获取客户端版本号
+		ClientInstall req_install = (ClientInstall) request.getAttribute("clientInstall");
+		if(req_install!=null){
+			version = req_install.getVersion();
+		}
+		
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");	
+		if(req_user!=null){
+			imei = req_user.getIMEI();
+			cid = req_user.getCid();
+			
+			if(version == null || version.length() == 0) {
+				ClientInstall c_install = req_user.getUserInstallProducIdChannelIdMap().get(productId);
+				
+				if(c_install!=null){
+					version = c_install.getVersion();
+				}
+			}
+		}
+		
+		Pattern phonePattern = Pattern.compile("^1\\d{10}$");
+		if(phone!=null && !phonePattern.matcher(phone).find()){
+			phone = null;
+		}
+		
+		if(content!=null && content.length()>0){
+			if(type <= 0 || type > 0 && clientService.leaveMsgCount(cid, type)==0){//当然留言统计
+				UserLeaveMessage msg = new UserLeaveMessage();
+				msg.setContent(content);
+				msg.setCid(cid);
+				msg.setImei(imei);
+				msg.setLeaveTime(System.currentTimeMillis());
+				msg.setPhone(phone);
+				msg.setPubId(pubId);
+				msg.setTermId(termId);
+				msg.setPhoneBrand(phoneBrand);
+				msg.setType(type);
+				msg.setProductId(productId);
+				msg.setVersion(version);
+				sent = clientService.addUserLeaveMessage(msg)?1:-1;
+			}
+		}
+		
+		if(backUrl!=null){
+			try{
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				backUrl = URLEncoder.encode(backUrl, "UTF-8");
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		if(type > 0){
+			try{
+				int infId = (Integer) request.getAttribute("infId");
+				if(infId != SysConfig.MODEL_INFO_ID){
+					if(type > 0){//专题留言
+						if(pageId == 0){
+							return "message/albumMsgOkTouch";
+						}else{
+							return "message/albumMsgOkTouch2";
+						}
+					}
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			if(pageId == 0){
+				return "message/albumMsgOk";
+			}else{
+				return "message/albumMsgOk2";
+			}
+		}
+		//System.out.print("p1"+request.getParameter("p1")+"p2"+request.getParameter("p2")+",imei="+imei+",cid="+cid);
+		return "redirect:mpnws_msg.go?m=edit&sent="+sent+"&backUrl="+backUrl+"&p1="+p1+"&u="+productId;
+	}
+}

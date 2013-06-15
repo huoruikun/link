@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="15790"
+   name=""
+   committed-date="2012-03-29T06:29:02.533832Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com/wap/sohu/mobilepaper/dao"
+   last-author="zhujianbo"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   committed-rev="15716"
+   name="NewsDao.java"
+   text-time="2012-03-29T02:54:32.190637Z"
+   committed-date="2012-03-28T07:53:46.021004Z"
+   checksum="956340bef653c1e38f9277f0e35ccf24"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-29T02:54:32.081333Z"/>
+<entry
+   committed-rev="15069"
+   name="ClientUserDao.java"
+   text-time="2012-03-23T02:26:16.257757Z"
+   committed-date="2012-03-16T02:20:31.050185Z"
+   checksum="be4f2594d9f5dce55e96f017f119a1c4"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-23T02:26:15.992261Z"/>
+<entry
+   committed-rev="8887"
+   name="UserPubCityDao.java"
+   text-time="2012-03-23T02:26:16.273375Z"
+   committed-date="2011-08-13T09:56:28.983325Z"
+   checksum="c3082149c147965c7a2f520b09e90c62"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:15.992261Z"/>
+<entry
+   committed-rev="8126"
+   name="PubCityDao.java"
+   text-time="2012-03-23T02:26:16.273375Z"
+   committed-date="2011-07-30T09:26:29.149128Z"
+   checksum="66ebacf2cd8fc02853d73c5e9967511a"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.007879Z"/>
+<entry
+   committed-rev="4056"
+   name="ChannelPubDao.java"
+   text-time="2012-03-23T02:26:16.288992Z"
+   committed-date="2011-03-18T08:09:43.762999Z"
+   checksum="68c165381eb646c4a3e6277e70cf04ad"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.007879Z"/>
+<entry
+   committed-rev="10661"
+   name="ProductDao.java"
+   text-time="2012-03-23T02:26:16.288992Z"
+   committed-date="2011-10-11T11:43:19.131747Z"
+   checksum="ff7502d9b35a4ffa6b1a6e656e3f8c13"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.007879Z"/>
+<entry
+   committed-rev="15688"
+   name="SubscriptionDao.java"
+   text-time="2012-03-27T11:07:34.283642Z"
+   committed-date="2012-03-27T11:14:48.222306Z"
+   checksum="f7fe2dd115728bd74779f590b251f3d7"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-26T10:43:24.241477Z"/>
+<entry
+   committed-rev="11788"
+   name="ChannelPackageDao.java"
+   text-time="2012-03-23T02:26:16.304609Z"
+   committed-date="2011-11-30T04:06:12.817736Z"
+   checksum="8ded42703bb9ad259c4b83f6e2f6d65f"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.023496Z"/>
+<entry
+   committed-rev="8837"
+   name="PubPageSubscribeDao.java"
+   text-time="2012-03-23T02:26:16.304609Z"
+   committed-date="2011-08-12T09:32:39.472543Z"
+   checksum="22c719fe11016c1079f36a59d26848fc"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.023496Z"/>
+<entry
+   committed-rev="9906"
+   name="ClientCancelPubDao.java"
+   text-time="2012-03-23T02:26:16.320227Z"
+   committed-date="2011-09-07T08:37:50.299770Z"
+   checksum="5d343989350d0b4e2f76b9e9898c2224"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.039114Z"/>
+<entry
+   committed-rev="11359"
+   name="UserRegistDao.java"
+   text-time="2012-03-23T02:26:16.320227Z"
+   committed-date="2011-11-15T06:41:37.435185Z"
+   checksum="ef7547dc7d5777e61982413e7e633f0e"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.039114Z"/>
+<entry
+   committed-rev="11362"
+   name="UserScoreHistoryDao.java"
+   text-time="2012-03-23T02:26:16.335844Z"
+   committed-date="2011-11-15T06:53:37.762521Z"
+   checksum="2733611abeb6b2d25c804597a275dd55"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.054731Z"/>
+<entry
+   committed-rev="12604"
+   name="SurveyDao.java"
+   text-time="2012-03-23T02:26:16.335844Z"
+   committed-date="2011-12-21T06:25:08.359501Z"
+   checksum="cf6f6334f2ad2367964b2ac16cf273ff"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.054731Z"/>
+<entry
+   committed-rev="2023"
+   name="WeatherDao.java"
+   text-time="2012-03-23T02:26:16.351462Z"
+   committed-date="2010-08-18T06:02:36.926828Z"
+   checksum="72eeea97207be199b8f59022f71edaca"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.054731Z"/>
+<entry
+   committed-rev="8837"
+   name="ShortMsgDao.java"
+   text-time="2012-03-23T02:26:16.351462Z"
+   committed-date="2011-08-12T09:32:39.472543Z"
+   checksum="7bf0d020ed817d7090e119660ff493bf"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.070348Z"/>
+<entry
+   committed-rev="12609"
+   name="BaseJdbcSupport.java"
+   text-time="2012-03-23T02:26:16.367079Z"
+   committed-date="2011-12-21T08:22:37.888269Z"
+   checksum="4405375c6bb630f07157fd3b2fca8b18"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.070348Z"/>
+<entry
+   name="pic"
+   kind="dir"/>
+<entry
+   committed-rev="14026"
+   name="SMSMessageDao.java"
+   text-time="2012-03-23T02:26:16.367079Z"
+   committed-date="2012-02-15T03:26:28.508881Z"
+   checksum="91b89a3e66718e6c23caea5ff6e93abf"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.117201Z"/>
+<entry
+   committed-rev="15376"
+   name="TermDao.java"
+   text-time="2012-03-23T02:26:16.382696Z"
+   committed-date="2012-03-22T02:33:54.935789Z"
+   checksum="5bd0ade19748c6645eb1cdd6803ed1b2"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.117201Z"/>
+<entry
+   committed-rev="15716"
+   name="ChannelDao.java"
+   text-time="2012-03-29T02:54:32.221866Z"
+   committed-date="2012-03-28T07:53:46.021004Z"
+   checksum="f4a124ce6bfb02829db624a3acc07232"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-29T02:54:32.175022Z"/>
+<entry
+   committed-rev="9686"
+   name="PublicationDao.java"
+   text-time="2012-03-23T02:26:16.398314Z"
+   committed-date="2011-09-01T08:54:42.587427Z"
+   checksum="6a67057234ecffa47f4e1d8d13337f44"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.132818Z"/>
+<entry
+   committed-rev="3453"
+   name="UpdateRuleDao.java"
+   text-time="2012-03-23T02:26:16.398314Z"
+   committed-date="2011-01-12T09:15:08.294811Z"
+   checksum="85c2f77646cef16297c88c2cdc7d2d7a"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.132818Z"/>
+<entry
+   committed-rev="6642"
+   name="ProductPageDao.java"
+   text-time="2012-03-23T02:26:16.398314Z"
+   committed-date="2011-06-29T03:03:08.802013Z"
+   checksum="fb72bd8a1d5f91668c1a8945ead16b6c"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.148435Z"/>
+<entry
+   committed-rev="14004"
+   name="UserSubscribeDao.java"
+   text-time="2012-03-23T02:26:16.413931Z"
+   committed-date="2012-02-14T12:16:26.795971Z"
+   checksum="6b8a21f7983256a53a57722da46b666a"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.148435Z"/>
+<entry
+   committed-rev="15068"
+   name="ClientSubscribeDao.java"
+   text-time="2012-03-23T02:26:16.413931Z"
+   committed-date="2012-03-16T02:19:46.773789Z"
+   checksum="1387b70a48a80d83c7e4daa1d2f282f6"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.148435Z"/>
+<entry
+   committed-rev="9781"
+   name="ClientIphoneDao.java"
+   text-time="2012-03-23T02:26:16.429549Z"
+   committed-date="2011-09-05T08:34:27.885880Z"
+   checksum="59fa42774f16a552ed3a29d76a401606"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.164053Z"/>
+<entry
+   committed-rev="7311"
+   name="ClientMacthRuleDao.java"
+   text-time="2012-03-23T02:26:16.429549Z"
+   committed-date="2011-07-14T03:34:17.497305Z"
+   checksum="796388f1004c191a1e874ec35054137c"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.164053Z"/>
+<entry
+   committed-rev="6911"
+   name="PlatformDao.java"
+   text-time="2012-03-23T02:26:16.445166Z"
+   committed-date="2011-07-05T06:46:22.985898Z"
+   checksum="1210df0fbe8af804ebb2d79edba9869e"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.164053Z"/>
+<entry
+   committed-rev="4061"
+   name="VersionReleaseDao.java"
+   text-time="2012-03-23T02:26:16.445166Z"
+   committed-date="2011-03-18T09:03:05.551553Z"
+   checksum="0d2110984bf298fdf9e212e8998f9a84"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.179670Z"/>
+<entry
+   committed-rev="6809"
+   name="PubSubscribeMapDao.java"
+   text-time="2012-03-23T02:26:16.460783Z"
+   committed-date="2011-07-01T09:45:51.289539Z"
+   checksum="965057f9ecd24091369138208e1b1a38"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.179670Z"/>
+<entry
+   committed-rev="3990"
+   name="ProductPubDao.java"
+   text-time="2012-03-23T02:26:16.460783Z"
+   committed-date="2011-03-17T06:50:13.511467Z"
+   checksum="0f6c8c0fafa1adac109478ef258a6d8b"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.195288Z"/>
+<entry
+   committed-rev="4253"
+   name="ProductShowPubDao.java"
+   text-time="2012-03-23T02:26:16.476401Z"
+   committed-date="2011-03-31T06:56:25.013773Z"
+   checksum="f945fd430eda9068dbedcd84ec1da9e0"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.195288Z"/>
+<entry
+   committed-rev="11340"
+   name="GiftDao.java"
+   text-time="2012-03-23T02:26:16.476401Z"
+   committed-date="2011-11-14T07:11:25.620747Z"
+   checksum="7e3d98ef6bed6d803fdc01b165f6738b"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.195288Z"/>
+<entry
+   committed-rev="14299"
+   name="UserLeaveMessageDao.java"
+   text-time="2012-03-23T02:26:16.476401Z"
+   committed-date="2012-02-27T10:00:26.666606Z"
+   checksum="d44957738b05c1bb0a1a819e8999fc4b"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.210905Z"/>
+<entry
+   committed-rev="2774"
+   name="GoldRankDao.java"
+   text-time="2012-03-23T02:26:16.492018Z"
+   committed-date="2010-11-15T03:28:30.372344Z"
+   checksum="f1d42ba16d4b9642ed688ec57a4593e3"
+   last-author="liyao"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.210905Z"/>
+<entry
+   committed-rev="14026"
+   name="ActivitiesUserDao.java"
+   text-time="2012-03-23T02:26:16.492018Z"
+   committed-date="2012-02-15T03:26:28.508881Z"
+   checksum="c4319bd1aad09468b92cc10d74d4923a"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.210905Z"/>
+<entry
+   committed-rev="11329"
+   name="BannerDao.java"
+   text-time="2012-03-23T02:26:16.507636Z"
+   committed-date="2011-11-13T06:34:59.522833Z"
+   checksum="756ff75d965c6c67249ed7cfc006b595"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.226522Z"/>
+<entry
+   committed-rev="6683"
+   name="PublicationPageDao.java"
+   text-time="2012-03-23T02:26:16.507636Z"
+   committed-date="2011-06-29T08:45:02.337018Z"
+   checksum="2d93316db79451b5c53726efbe1d30c5"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.226522Z"/>
+<entry
+   committed-rev="8897"
+   name="PrePackUrlDao.java"
+   text-time="2012-03-23T02:26:16.507636Z"
+   committed-date="2011-08-15T01:37:45.004252Z"
+   checksum="8d8008661e1af6f2c6df2021c107eec3"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.226522Z"/>
+<entry
+   committed-rev="2021"
+   name="AreaDao.java"
+   text-time="2012-03-23T02:26:16.523253Z"
+   committed-date="2010-08-18T06:00:44.623785Z"
+   checksum="d01728c901fedcd55a046f43c66f82e6"
+   last-author="jtong"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.242140Z"/>
+<entry
+   committed-rev="6092"
+   name="PHolidayDao.java"
+   text-time="2012-03-23T02:26:16.523253Z"
+   committed-date="2011-06-12T04:44:33.641358Z"
+   checksum="c5d6d81d71f6cffe8284fff691bd2abe"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:16.242140Z"/>
+</wc-entries>

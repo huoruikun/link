@@ -1,0 +1,60 @@
+package com.wap.sohu.mobilepaper.util;
+
+import org.apache.commons.lang.StringUtils;
+import org.dom4j.Attribute;
+import org.dom4j.CDATA;
+import org.dom4j.Document;
+import org.dom4j.DocumentException;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.dom4j.io.SAXReader;
+import org.jboss.netty.util.internal.StringUtil;
+
+public class Dom4jUtils {
+
+	public static void addElement(Element property, String param, String elementValue) {
+		if (!StringUtils.isBlank(elementValue)) {
+			Element element = property.addElement(param);
+			element.addText(elementValue);
+		}
+
+	}
+
+	public static void addPropertyElement(Element property, String param, String elementValue) {
+		if (!StringUtils.isBlank(elementValue)) {
+			 property.addAttribute(param, elementValue) ;
+		}
+
+	}
+
+	public static void addElement(Element property, String param, Object elementValue, Object defaultValue) {
+		Element element = property.addElement(param);
+		if (elementValue != null)
+			element.addText(elementValue.toString());
+		else
+			element.addText(defaultValue.toString());
+
+	}
+
+	public static void addCDATAElement(Element property, String param, Object elementValue) {
+
+		Element element = property.addElement(param);
+		if (elementValue != null) {
+			CDATA data = DocumentHelper.createCDATA(elementValue.toString());
+			element.add(data);
+		}
+
+	}
+
+	public void doInfoXML(String infoXML) {
+
+		Document document;
+		try {
+			document = DocumentHelper.parseText(infoXML);
+			Element root = document.getRootElement();
+
+		} catch (DocumentException e1) {
+			e1.printStackTrace();
+		}
+	}
+}

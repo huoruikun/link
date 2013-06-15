@@ -1,0 +1,38 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ProductPage;
+import com.wap.sohu.mobilepaper.util.LRUMap;
+
+@Repository("productPageDao")
+public class ProductPageDao extends BaseJdbcSupport {
+	
+	public ProductPage find(int pageId) {
+		String sql = "select * from p_product_page where id=?";
+		List<ProductPage> list = getJdbcTemplate().query(
+				sql, new Object[]{pageId}, new dataMapper());
+		if(list != null && list.size() > 0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	class dataMapper implements RowMapper<ProductPage> {
+
+		@Override
+		public ProductPage mapRow(ResultSet rs, int arg1) throws SQLException {
+			ProductPage x_ret = new ProductPage();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setPageName(rs.getString("pageName"));
+			return x_ret;
+		}
+		
+	}
+	
+}

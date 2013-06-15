@@ -1,0 +1,75 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.ui.ModelMap;
+
+public class PageUtil {
+
+	private static PageUtil instance = new PageUtil();
+	
+	public static PageUtil getInstance(){
+		return instance;
+	}
+	
+	public String encode(String url){
+		return encode(url, "UTF-8");
+	}
+	
+	public String encode(String url, String charset){
+		try{
+			if(url!=null){
+				if(charset == null || charset.length()==0){
+					charset = "UTF-8";
+				}
+				return URLEncoder.encode(url, charset);
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	public String decode(String url){
+		return decode(url, "UTF-8");
+	}
+	
+	public String decode(String url, String charset){
+		try{
+			if(url!=null){
+				if(charset == null || charset.length()==0){
+					charset = "UTF-8";
+				}
+				return URLDecoder.decode(url, charset);
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	public String decodeAndEncode(String url){
+		return decodeAndEncode(url, "UTF-8");
+	}
+	
+	public String decodeAndEncode(String url, String charset){
+		try{
+			if(url!=null){
+				if(charset == null || charset.length()==0){
+					charset = "UTF-8";
+				}
+				return URLEncoder.encode(URLDecoder.decode(url, charset), charset);
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	public void transmitParameter(ModelMap model, HttpServletRequest request, String key) {
+		model.addAttribute(key, encode(decode(request.getParameter(key))));
+	}
+}

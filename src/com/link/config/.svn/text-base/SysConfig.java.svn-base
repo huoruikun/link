@@ -1,0 +1,447 @@
+package com.wap.sohu.mobilepaper.conf;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.service.GroupPicServiceImpl;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil; 
+
+public class SysConfig {
+	
+	
+
+	//服务端推送内容的实效性控制 需要控制早晚/报、快讯、订阅内容的发布实效性
+	public static boolean TIME_OUT_CHECK = false;
+	
+	public static  int MONING_PAPER_STARTTIME = 7;
+	public static  int MONING_PAPER_ENDTIME = 18;
+	
+	public static  int EVENING_PAPER_STARTTIME = 12;
+	public static  int EVENING_PAPER_ENDTIME = 24;
+	
+	public static  int SUBSCRIBE_PAPER_STARTTIME = 7;
+	public static  int SUBSCRIBE_PAPER_ENDTIME = 24;
+	
+	public static  String PAGE_STATIC_URL_ROOT = "http://content.k.sohu.com/mpaper/";
+	public static  String ZIP_STATIC_URL_ROOT = "http://221.179.173.198/mpaper/";
+	
+	public static  String KEY_UPGRADE_URL = "http://client.wap.sohu.com/43/";
+	public static  String KEY_UPGRADE_URL_NEW = "http://10.13.81.38/server/checkUpdate.jsp?";
+
+	public static String CLIENT_LOGFILE_PATH = "/opt/wwwlogs/clientlog/";
+	public static String ACK_LOGFILE_PATH = "/opt/wwwlogs/acklog/";
+	public static boolean CLIENT_LOGFILE = false;
+	
+	public static String Statictics_LOGFILE_PATH = "/opt/wwwlogs/staticticslog/";
+	
+	public static int WEATHER_DEFAULT_CITY = 74;
+	
+//	public static String CLIENT_FREQUENCY_SET = "8-9,15;18-19,15";
+	public static String CLIENT_FREQUENCY_DEFAULT = "15";
+	public static String CLIENT_RANDOM = "5";
+	
+	public static final int USER_NORMAL = 1;
+	public static final int USER_UNCHECKED = 0;
+	
+	public static boolean UPDATE_CLIENT_LOG = false;
+	
+	public static String SMS_ALERT_URL = "";
+	
+	public static final String ONE_PACKAGE_PLATFORM = Properties.get("release.onepackage.platform");
+ 
+	public static List<String> ZIP_IPS = new ArrayList<String>();
+	
+	public static List<String> DOWNLOAD_IPS = new ArrayList<String>();
+	
+	public static int ZIP_IPS_SIZE = 0;
+	
+	
+	public static String API_SERVER = "";
+	
+	public static String CLIENT_SERVER_PORT  = "7070,7071,7072,7073,7074,8097";
+	
+	
+	public static int IS_TEST_MODEL = 0;
+	
+	public static String TEST_APP = "";
+	
+	public static List<String> TEST_IMEI = new ArrayList<String>();
+	
+	public static HashSet<String> TEST_IMEI_SET = new HashSet<String>();
+	
+	public static int LOOP_LOCAL_CACHE_TIME = 10000;
+	
+	public static int MODEL_INFO_ID = 7;
+	
+	
+	public static boolean isUpdate = false;
+	
+	public static String selfPort = null;
+	
+	public static boolean IS_TEST_MACHINE = false;
+	 
+	
+	public static int DAYS_USER_ACTIVE = 7; 
+	
+	public static final int DATE_TYPE_NORMAL = 0;
+	public static final int DATE_TYPE_WEEKEND = 1;
+	public static final int DATE_TYPE_HOLIDAY = 2;
+	
+		public static String INNER_TEST_SERVER = "http://10.13.81.87";
+	
+	public static long INNER_TEST_UID_START = 100000000;
+	
+	public static long INNER_TEST_UID_END = 200000000;
+	
+	public static String INNER_TEST_IMEIS = Properties.get("inner_test_imeis");
+	
+	public static final int PUB_LIST_TYPE_PUSH = 0;//用户订阅接收push的刊物列表
+	public static final int PUB_LIST_TYPE_ALL = 1;//用户所有订阅的的刊物列表
+	
+	public static int TPL_TYPE_COMMON = 1;//模板类型对应的Id
+	public static int TPL_TYPE_TOUCH = 5;
+	public static int TPL_TYPE_LOW = 3;
+	
+	/** 默认适配ID*/
+	public static int DEFAULT_ADAPT_ID = 4;
+	
+	/** 图片服务器（图片路径前缀） */
+	public static String IMAGE_SERVER = "http://cache.k.sohu.com/img8/wb/";
+	
+	public static final String IMAGE_ADAPT_SERVER = "http://pic.k.sohu.com/img7/adapt/wb/";
+	
+	public static String DOWNLOAD_DOMAIN = "";
+	
+	public static String CDN_HOST = "cache.k.sohu.com";
+	
+	public static String HOME_TYPE_1_IMAGE_SRC = "http://221.179.173.138/img8/wb/picon/m1.jpg";
+	public static String HOME_TYPE_2_IMAGE_SRC = "http://221.179.173.138/img8/wb/picon/e1.jpg";
+	public static String HOME_TYPE_3_IMAGE_SRC = "http://221.179.173.138/img8/wb/picon/w1.jpg";
+	
+	//报纸首页，动态代理url
+	public static String PAPER_HOME_PROXY_URL = "http://api.k.sohu.com/api/client/proxy.go?m=indexPage";
+
+    public final static int SYNC_SUB_FLAG = 2;
+    
+    // 组图推荐队列服务器
+    public final static String MSG_QUEUE_SERVER_GROUPPIC = "10.13.81.107";
+    
+    // 临近检测点的分钟数--检测点后20分钟内就算临近
+    public final static int NEAR_NET_TIME_MINUTE = 20;
+    
+    // 默认的联网时间（未作任何处理时）
+    public final static int DEFAULT_NET_TIME = 120;
+    
+    // 出错情况下的联网时间
+    public final static int ERROR_NET_TIME = 59;
+    
+    // public final static String ACTIVITIES_SMS_FORMAT = 
+    //	"搜狐新闻，随时随地关注新闻资讯。安卓平台（ios平台、塞班 V3平台、塞班V5平台）下载地址: http://s.itc.cn/and1071";
+	
+	public enum fileType{
+		listPage(1), //新闻列表页 --首页
+		listLetter(5), //快讯列表页 --首页
+		newsPage(2),//新闻正文页
+		commentPage(3),//评论页
+		imgGroupPage(4);//组图正文页
+		
+		private int value = 0;
+		private fileType(int value){
+			this.value = value;
+		}
+		public int getValue(){
+			return value;
+		}
+		
+	}
+	
+	public static String DEFAULT_PUB_IDS="102,103,1";
+	
+	public static String HOME_AD="0";
+	public static String HOME_AD_IMAGE_SRC="";
+	public static String HOME_AD_IMAGE_SRC_BIG="";
+	public static String HOME_AD_IMAGE_SRC_MIDDLE="";
+	public static String HOME_AD_ORDER="";
+	public static String HOME_AD_LINK="http://s.itc.cn/";
+	static{
+//		SystemInfo.main(null);
+		
+		new Thread(){
+			public void run(){
+				String[] portArray = CLIENT_SERVER_PORT.split(",");
+				
+				
+				while(selfPort == null){
+					for(String port : portArray){
+						String url = "http://127.0.0.1:"+port+"/api/set.go?m=port&p="+port;
+						try{
+							HttpUtil.getUrlContent(url, "UTF-8");
+						}catch(Exception e){
+							
+						}
+					}
+					
+					try {
+						Thread.sleep(1000);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+				System.out.println("selfPort="+selfPort);
+				
+				synchronized(LogWriter.class){
+					LogWriter.setLog4jProperty();
+					
+					while(LogWriter.runlog == null){
+						try{
+							Thread.currentThread().sleep(1000L);
+						}catch(Exception e){
+							e.printStackTrace();
+						}
+						LogWriter.setLog4jProperty();
+					}
+					System.out.println("set logger ok :) selfPort="+selfPort);
+				}
+				
+			}
+		}.start();
+		
+		
+		String isUpdateStr= Properties.get("isUpdate");
+		if(isUpdateStr!=null && isUpdateStr.equals("true")){
+			System.out.println("isUpdate=true");
+			
+			isUpdate = true;
+		}else{
+			System.out.println("isUpdate=false");
+		}
+		
+		String time_out_check= Properties.get("time_out_check");
+		if(time_out_check!=null&&time_out_check.equals("true")){
+			TIME_OUT_CHECK = true;
+		}
+		
+	
+		
+		String client_logfile= Properties.get("client_logfile");
+		if(client_logfile!=null&&client_logfile.equals("true")){
+			CLIENT_LOGFILE = true;
+		}
+		
+		
+		
+		
+		String client_logfile_path= Properties.get("client_logfile_path");
+		if(CommonUtils.isNotEmpty(client_logfile_path)){
+			CLIENT_LOGFILE_PATH = client_logfile_path;
+		}
+		
+		
+		String update_client_log= Properties.get("update_client_log");
+		if(CommonUtils.isNotEmpty(update_client_log)&& update_client_log.equals("true")){
+			UPDATE_CLIENT_LOG = true;
+		}
+		
+		String smsAlertURL = Properties.get("SMS_ALERT_URL");
+		if(StringUtils.isNotEmpty(smsAlertURL)){
+			SMS_ALERT_URL = smsAlertURL;
+		}
+		
+		String zipIPs = Properties.get("ZIP_IPS");
+		if(StringUtils.isNotEmpty(zipIPs)){
+			String[] zips =zipIPs.split(",");
+			for(String zip:zips){
+				ZIP_IPS.add(zip);
+			}
+			ZIP_IPS_SIZE = ZIP_IPS.size();
+		}
+		
+		
+		String apiServer = Properties.get("API_SERVER");
+		if(StringUtils.isNotEmpty(apiServer)){
+			API_SERVER = apiServer;
+		}
+		
+		String client_server_port= Properties.get("CLIENT_SERVER_PORT");
+		if(StringUtils.isNotEmpty(client_server_port)){
+			CLIENT_SERVER_PORT = client_server_port;
+		}
+		
+	
+		String downloadIPs = Properties.get("DOWNLOAD_IPS");
+		if(StringUtils.isNotEmpty(downloadIPs)){
+			String[] downloads =downloadIPs.split(",");
+			for(String zip:downloads)
+				DOWNLOAD_IPS.add(zip); 
+		}
+		
+		
+		String testModel = Properties.get("IS_TEST_MODEL");
+		if(StringUtils.isNotEmpty(testModel)){
+			IS_TEST_MODEL = Integer.parseInt(testModel);
+		}
+		
+		String testApp = Properties.get("TEST_APP");
+		if(StringUtils.isNotEmpty(testApp)){
+			TEST_APP = testApp;
+		}
+		
+		String testIMEI = Properties.get("TEST_IMEI");
+		if(StringUtils.isNotEmpty(testIMEI)){
+			String[] testIMEIs =testIMEI.split(",");
+			for(String imei:testIMEIs){
+				TEST_IMEI.add(imei);
+				
+				TEST_IMEI_SET.add(imei);
+			}
+				
+		}
+		
+		String LOOP_LOCAL_CACHE_TIME_STR = Properties.get("loop_local_cache_time");
+		if(StringUtils.isNotEmpty(LOOP_LOCAL_CACHE_TIME_STR)){
+			try {
+				LOOP_LOCAL_CACHE_TIME = Integer.parseInt(LOOP_LOCAL_CACHE_TIME_STR);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		String testMachine = Properties.get("IS_TEST_MACHINE");
+		if(StringUtils.isNotEmpty(testMachine)){
+			IS_TEST_MACHINE = Boolean.parseBoolean(testMachine);
+		}
+		
+	
+		String type1ImageSrc = Properties.get("HOME_TYPE_1_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(type1ImageSrc)){
+			HOME_TYPE_1_IMAGE_SRC = type1ImageSrc;
+		}
+		String type2ImageSrc = Properties.get("HOME_TYPE_2_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(type2ImageSrc)){
+			HOME_TYPE_2_IMAGE_SRC = type2ImageSrc;
+		}
+		String type3ImageSrc = Properties.get("HOME_TYPE_3_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(type3ImageSrc)){
+			HOME_TYPE_3_IMAGE_SRC = type3ImageSrc;
+		}
+		
+		String defaultPubIds = Properties.get("DEFAULT_PUB_IDS");
+		if(StringUtils.isNotEmpty(defaultPubIds)){
+			DEFAULT_PUB_IDS = defaultPubIds;
+		}
+		
+		String homeAd = Properties.get("HOME_AD");
+		if(StringUtils.isNotEmpty(homeAd)){
+			HOME_AD = homeAd;
+		}
+		
+		String homeAdImageSrc = Properties.get("HOME_AD_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(homeAdImageSrc)){
+			HOME_AD_IMAGE_SRC = homeAdImageSrc;
+		}
+		
+		String homeAdImageSrcBig = Properties.get("HOME_AD_IMAGE_SRC_BIG");
+		if(StringUtils.isNotEmpty(homeAdImageSrcBig)){
+			HOME_AD_IMAGE_SRC_BIG = homeAdImageSrcBig;
+		}
+		
+		String homeAdImageSrcMiddle = Properties.get("HOME_AD_IMAGE_SRC_MIDDLE");
+		if(StringUtils.isNotEmpty(homeAdImageSrcMiddle)){
+			HOME_AD_IMAGE_SRC_MIDDLE = homeAdImageSrcMiddle;
+		}
+		
+		String homeAdOrder = Properties.get("HOME_AD_ORDER");
+		if(StringUtils.isNotEmpty(homeAdOrder)){
+			HOME_AD_ORDER = homeAdOrder;
+		}
+		String homeAdLink = Properties.get("HOME_AD_LINK");
+		if(StringUtils.isNotEmpty(homeAdLink)){
+			HOME_AD_LINK = homeAdLink;
+		}
+		
+		String downloadDomain = Properties.get("DOWNLOAD_DOMAIN");
+		if(StringUtils.isNotEmpty(downloadDomain)){
+			DOWNLOAD_DOMAIN = downloadDomain;
+		}
+	}
+	
+	public static void load(){
+		String testMachine = Properties.get("IS_TEST_MACHINE");
+		if(StringUtils.isNotEmpty(testMachine)){
+			IS_TEST_MACHINE = Boolean.parseBoolean(testMachine);
+		}
+		
+		String testIMEI = Properties.get("TEST_IMEI");
+		if(StringUtils.isNotEmpty(testIMEI)){
+			String[] testIMEIs =testIMEI.split(",");
+			List<String> TEST_IMEI_TEMP = new ArrayList<String>();
+			HashSet<String> TEST_IMEI_SET_TEMP = new HashSet<String>();
+			for(String imei:testIMEIs){
+				TEST_IMEI_TEMP.add(imei);
+				TEST_IMEI_SET_TEMP.add(imei);
+			}
+			TEST_IMEI = TEST_IMEI_TEMP;
+			TEST_IMEI_SET = TEST_IMEI_SET_TEMP;
+		}
+		
+		String isUpdateStr= Properties.get("isUpdate");
+		if(isUpdateStr!=null && isUpdateStr.equals("true")){
+			System.out.println("isUpdate=true");
+			
+			isUpdate = true;
+		}else{
+			System.out.println("isUpdate=false");
+		}
+		
+		
+		String type1ImageSrc = Properties.get("HOME_TYPE_1_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(type1ImageSrc)){
+			HOME_TYPE_1_IMAGE_SRC = type1ImageSrc;
+		}
+		String type2ImageSrc = Properties.get("HOME_TYPE_2_IMAGE_SRC");
+		if(StringUtils.isNotEmpty(type2ImageSrc)){
+			HOME_TYPE_2_IMAGE_SRC = type2ImageSrc;
+		}
+		
+		int tpl_type_common = ParseUtil.paseInt(Properties.get("tpl_type_common"), 0);
+		int tpl_type_touch = ParseUtil.paseInt(Properties.get("tpl_type_touch"), 0);
+		int tpl_type_low = ParseUtil.paseInt(Properties.get("tpl_type_low"), 0);
+		if(tpl_type_common > 0){
+			TPL_TYPE_COMMON = tpl_type_common;
+		}
+		if(tpl_type_touch > 0){
+			TPL_TYPE_TOUCH = tpl_type_touch;
+		}
+		if(tpl_type_low > 0){
+			TPL_TYPE_LOW = tpl_type_low;
+		}
+				
+		String innerTestServerFromConfig = Properties.get("inner_test_server");
+		if(StringUtils.isNotEmpty(innerTestServerFromConfig)) {
+			INNER_TEST_SERVER = innerTestServerFromConfig;
+		}
+		INNER_TEST_IMEIS = Properties.get("inner_test_imeis");
+		
+		String paperHomeProxyUrl = Properties.get("paper_home_proxy_url");
+		if(StringUtils.isNotEmpty(paperHomeProxyUrl)) {
+			PAPER_HOME_PROXY_URL = paperHomeProxyUrl;
+		}
+		
+		String page_static_url_root = Properties.get("page_static_url_root");
+		if(StringUtils.isNotEmpty(page_static_url_root)) {
+			PAGE_STATIC_URL_ROOT = page_static_url_root;
+		}
+		
+		String grouppic_queue_name = Properties.get("grouppic_queue_name");
+		if(StringUtils.isNotEmpty(grouppic_queue_name)){
+			GroupPicServiceImpl.QUEUE_NAME = grouppic_queue_name;
+		}
+	}
+	
+}

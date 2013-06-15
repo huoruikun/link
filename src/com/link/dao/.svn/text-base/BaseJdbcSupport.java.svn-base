@@ -1,0 +1,53 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+public abstract class BaseJdbcSupport {
+	@Autowired
+    @Qualifier("mobilePaperJdbcTemplate")
+    protected JdbcTemplate mobilePaperJdbcTemplate;
+
+  
+	public JdbcTemplate getJdbcTemplate() {
+		return mobilePaperJdbcTemplate;
+	}
+	
+	public JdbcTemplate getAppNewsJdbcTemplate() {
+		return mobilePaperJdbcTemplate;
+	}
+    
+	 
+	@Autowired
+    @Qualifier("interfaceJdbcTemplate")
+    protected JdbcTemplate interfaceJdbcTemplate;
+	
+	public JdbcTemplate getInterfaceJdbcTemplate() {
+		return interfaceJdbcTemplate;
+	} 
+	
+	 
+	@Autowired
+    @Qualifier("upgradeJdbcTemplate")
+    protected JdbcTemplate upgradeJdbcTemplate;
+
+	
+	@Autowired
+    @Qualifier("subscribeJdbcTemplate")
+    protected JdbcTemplate subscribeJdbcTemplate;
+	
+	public JdbcTemplate getSubscribeJdbcTemplate() {
+		return subscribeJdbcTemplate;
+	} 
+	 
+
+	@Autowired
+    @Qualifier("picsJdbcTemplate")
+    protected JdbcTemplate picsJdbcTemplate;
+	
+	public JdbcTemplate getPicsJdbcTemplate() {
+		return picsJdbcTemplate;
+	} 
+	
+}

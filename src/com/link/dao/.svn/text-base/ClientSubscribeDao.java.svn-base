@@ -1,0 +1,108 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.ClientSubscribe;
+
+@Repository("clientSubscribeDao")
+public class ClientSubscribeDao extends BaseJdbcSupport {
+
+	private SimpleJdbcInsert insertActor = null;
+
+	@PostConstruct
+	public void init() {
+		insertActor = new SimpleJdbcInsert(getInterfaceJdbcTemplate().getDataSource()).withTableName("c_client_subscribe")
+				.usingGeneratedKeyColumns("id");
+	}
+
+	/**
+	 * 根据用户ID, 获取用户订阅的刊物列表<BR>
+	 * 注: 这里返回的是c_client_subscribe(用户和刊物对照表)表的数据
+	 * @param cid  用户ID
+	 * @return
+	 */
+	public List<ClientSubscribe> find(long cid) {
+		String SQL_QUERY = "select pubId,productId,isPush from c_client_subscribe where cid=" + cid;
+		List<ClientSubscribe> list = getInterfaceJdbcTemplate().query(SQL_QUERY, new dataMapper());
+		// LogWriter.log("*****************************************"
+		// +"\n"+SQL_QUERY+" CID == "+cid+"  list.size() = "+list.size());
+		return list;
+	}
+
+	private class dataMapper implements RowMapper<ClientSubscribe> {
+		public ClientSubscribe mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientSubscribe clientSubscribe = new ClientSubscribe();
+
+			clientSubscribe.setProductId(rs.getInt("productId"));
+			clientSubscribe.setPubId(rs.getInt("pubId"));
+			clientSubscribe.setIsPush(rs.getInt("isPush"));
+
+			return clientSubscribe;
+		}
+	}
+
+	private class dataMapper1 implements RowMapper<ClientSubscribe> {
+		public ClientSubscribe mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientSubscribe x_ret = new ClientSubscribe();
+			x_ret.setId(rs.getLong("id"));
+			x_ret.setCid(rs.getLong("cid"));
+			x_ret.setProductId(rs.getInt("productId"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			x_ret.setIsPush(rs.getInt("isPush"));
+			return x_ret;
+		}
+	}
+
+	public ClientSubscribe find(long cid, int pubId, int productId) {
+		String SQL_QUERY = "select * from c_client_subscribe where cid=? and pubId=? and productId=?";
+		List<ClientSubscribe> list = getInterfaceJdbcTemplate().query(SQL_QUERY, new Object[] { cid, pubId, productId },
+				new dataMapper1());
+		if (list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+
+	public ClientSubscribe find(long cid, int pubId, int productId,int isPush) {
+		String SQL_QUERY = "select * from c_client_subscribe where cid=? and pubId=? and productId=? and isPush=?  ";
+		List<ClientSubscribe> list = getInterfaceJdbcTemplate().query(SQL_QUERY, new Object[] { cid, pubId, productId ,isPush },
+				new dataMapper1());
+		if (list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public boolean create(ClientSubscribe obj) {
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(obj);
+		Number num = insertActor.executeAndReturnKey(parameters);
+		return num.intValue() > 0 ? true : false;
+	}
+
+	public void updatePush(long id, int isPush) {
+		this.getInterfaceJdbcTemplate().update("update  c_client_subscribe  set isPush = ? where id=? ",
+				new Object[] { isPush, id }); 
+	}
+	
+	public void delete(long cid, int pubId, int productId) {
+		this.getInterfaceJdbcTemplate().update("delete from c_client_subscribe where cid=? and pubId=? and productId=?",
+				new Object[] { cid, pubId, productId }); 
+	}
+
+	public void delete(long cid, int pubId, int productId,int isPush) {
+		this.getInterfaceJdbcTemplate().update("delete from c_client_subscribe where cid=? and pubId=? and productId=? and isPush = ?",
+				new Object[] { cid, pubId, productId,isPush }); 
+	}
+	
+}

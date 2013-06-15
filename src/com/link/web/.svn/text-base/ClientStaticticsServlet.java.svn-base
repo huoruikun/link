@@ -1,0 +1,277 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Enumeration;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+
+public class ClientStaticticsServlet  extends BaseServlet {
+
+	private static final long serialVersionUID = 7884198855185047941L;
+	
+	private static UpdateLog updateLog = UpdateLog.getInstance();
+
+	@Override
+	public void doGet(HttpServletRequest request, HttpServletResponse response) {
+		setCommon(request, response);
+		ClientUser clientUser = getClientUser(request, response);
+		PrintWriter out = null;
+		try {
+			out = response.getWriter();
+			
+			String receive = HttpUtil.getRequestString(request, "receive", "");
+			String clicks = HttpUtil.getRequestString(request, "clicks", "");
+			String options = HttpUtil.getRequestString(request, "options", "");
+			String softs = HttpUtil.getRequestString(request, "soft", "");
+			String error = HttpUtil.getRequestString(request, "error", "");
+			
+			String ack = HttpUtil.getRequestString(request, "ack", "");
+			
+			
+			
+//			Enumeration     eddd     =     (Enumeration)     request.getParameterNames();   
+//		    while(eddd.hasMoreElements())     {   
+//		    	String parName=(String)eddd.nextElement();   
+//		    	System.out.println("==soft====  "+parName+"   "+request.getParameter(parName));   
+//		    } 
+			
+			 
+			
+			
+			
+			
+//			receive = receive.replaceAll("\\\\t", "\\\t");
+//			receive = receive.replaceAll("\\\\n", "\\\n");
+//			clicks = clicks.replaceAll("\\\\t", "\\\t");
+//			clicks = clicks.replaceAll("\\\\n", "\\\n");
+//			options = options.replaceAll("\\\\t", "\\\t");
+//			options = options.replaceAll("\\\\n", "\\\n");
+			
+//			System.out.println("haha==hehe===="+clicks);
+			
+			for(String rece:receive.split("\n")){
+				try{
+					if(rece!=null && !"".equals(rece.trim()) ){
+						LogWriter.receivelog(clientUser.getIMEI()+"\t"+rece);
+					}
+				}catch(Exception e){
+					e.printStackTrace();
+					LogWriter.errlog("rece err:"+rece);
+				}
+				
+				
+			}
+			
+			
+			
+			
+//			LogWriter.clickslog("===================");
+//			LogWriter.clickslog("post_clicks:"+clicks);
+//			LogWriter.clickslog("===================");
+			
+			for(String click:clicks.split("\n")){
+				try{
+					if(click!=null && !"".equals(click.trim())){
+						String[] tmpArr = click.split("\t");
+			        	String res = null;
+			        	if(tmpArr[0].contains("mpnws_") && !tmpArr[0].contains("#mpnws") ){ // 点击的是新闻
+//			        		LogWriter.clickslog(tmpArr[0]);
+			        		
+			        		String[] newsArr = tmpArr[0].split("_");
+			        		if(newsArr!=null && newsArr.length>=4){
+			        			res = clientUser.getIMEI()+"\t0\t"+newsArr[1]+"\t"+newsArr[3]+"\t"+tmpArr[2]+"\t1";
+			        		}
+			        	}else if(tmpArr[0].contains("mpaperhome_")){
+//			        		LogWriter.clickslog(tmpArr[0]);
+			        		
+			        		String[] termArr = tmpArr[0].split("_"); // 点击的是列表页
+			        		res = clientUser.getIMEI()+"\t"+termArr[2]+"\t"+termArr[1]+"\t0\t"+tmpArr[2]+"\t2";
+			        	}else if (tmpArr[0].contains(".html")) {
+			        		tmpArr[0]=tmpArr[0].replace(".html", "");
+			        		String[] termArr = tmpArr[0].split("_");
+			        		res = clientUser.getIMEI()+"\t"+termArr[0]+"\t"+termArr[1]+"\t"+tmpArr[1]+"\t"+tmpArr[2];
+			        	}else if (tmpArr[0].contains(".xml")) {
+			        		tmpArr[0]=tmpArr[0].replace(".xml", "");
+			        		String[] termArr = tmpArr[0].split("_");
+			        		res = clientUser.getIMEI()+"\t"+termArr[0]+"\t"+termArr[1]+"\t"+tmpArr[1]+"\t"+tmpArr[2];
+			        	}
+			        	
+			        	if(res!=null){
+			        		LogWriter.clickslog(res);
+			        	}
+			        }
+				}catch(Exception e){
+					e.printStackTrace();
+					LogWriter.errlog("click err:"+click);
+				}
+				
+				
+			}
+			
+			for(String option:options.split("\n")){
+				try{
+					if(option!=null && !"".equals(option.trim())){
+						LogWriter.optionslog(clientUser.getIMEI()+"\t"+option);
+					}
+				}catch(Exception e){
+					e.printStackTrace();
+					LogWriter.errlog("option err:"+option);
+				}
+				
+			}
+			
+			try{
+				if(error!=null && !"".equals(error.trim())){
+					for(String err:error.split("\n")){
+						if(err!=null && !"".equals(err.trim())){
+							LogWriter.errlog(clientUser.getIMEI()+"\t"+err);
+						}
+					}
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+			
+			
+//			System.out.println("====ack===="+ack);
+			
+			// 回执的处理
+			try{
+				if(ack!=null && !"".equals(ack.trim())){
+					String[] ackArray = ack.split("\n");
+					for(String ackPerTerm:ackArray){
+						try{
+							if(ackPerTerm!=null && !"".equals(ackPerTerm.trim())){
+								LogWriter.acklog(DateUtil.getDate("")+"\t"+clientUser.getIMEI()+"\t"+ackPerTerm);
+							}
+						}catch(Exception e){
+							e.printStackTrace();
+							LogWriter.errlog("ackPerTerm err:"+ackPerTerm);
+						}
+						
+						
+						
+						
+					}
+					
+					
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+			// 软件列表
+			try{
+				if(softs!=null && !"".equals(softs.trim())){
+					String[] softArray = softs.split("\n");
+					for(String perSoft:softArray){
+						try{
+							if(perSoft!=null && !"".equals(perSoft.trim())){
+								LogWriter.softlog(DateUtil.getDate("")+"\t"+clientUser.getIMEI()+"\t"+perSoft);
+							}
+						}catch(Exception e){
+							e.printStackTrace();
+							LogWriter.errlog("ackPerTerm err:"+perSoft);
+						}
+					}
+					
+					
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+			
+			
+			
+			
+			String msg = "<root><succss><value>200</value></succss></root>";
+			byte[] data = msg.getBytes("utf-8");
+			response.setStatus(200);
+			response.setContentLength(data.length);
+			out.print(msg);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return;
+	}
+	
+	@Override
+	public void doPost(HttpServletRequest request, HttpServletResponse response){
+		doGet(request,response);
+	}
+	
+}
+
+class UpdateLog{
+	static UpdateLog instance = new UpdateLog();
+	static AtomicInteger isRun = new AtomicInteger(0);
+	static Thread thread = new Thread(){
+		public void run(){
+			try {
+				sleep(60*1000); 
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			
+			while(true){
+				try{
+					LogWriter.receivelog("\n");
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+				
+				try{
+					LogWriter.clickslog("\n");
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+				
+				try{
+					LogWriter.optionslog("\n");
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+				
+				try{
+					LogWriter.acklog("\n");
+				}catch(Exception e){
+					e.printStackTrace();
+				}
+				
+				try {
+					sleep(3600*1000); // 睡眠1小时
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	};
+	public static UpdateLog getInstance(){
+		run();
+		return instance;
+	}
+	public static void run(){
+		if(isRun.get() == 0){
+			isRun.set(1);
+			try {
+				thread.start();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+}

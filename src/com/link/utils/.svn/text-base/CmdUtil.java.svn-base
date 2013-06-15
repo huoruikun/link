@@ -1,0 +1,50 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
+public class CmdUtil {
+
+	/**
+	 * 执行shell命令 并返回命令输出内容
+	 * 
+	 * @param cmd
+	 * @return
+	 * @throws IOException
+	 */
+	public static StringBuffer executeCmd(String cmd) throws IOException {
+		StringBuffer outpubSb = new StringBuffer();
+		Runtime runtime = Runtime.getRuntime();
+		InputStream in = null;
+		InputStreamReader reader = null;
+		BufferedReader br = null;
+		try {
+			Process proc = runtime.exec(cmd);
+
+			in = proc.getInputStream();
+			reader = new InputStreamReader(in);
+			br = new BufferedReader(reader);
+
+			String line = null;
+			while ((line = br.readLine()) != null) {
+				// TODO 对字符集进行处理
+				// line = new String(line.getBytes(), "utf-8");
+				outpubSb.append(line).append("<br/>");
+			}
+
+			proc.waitFor();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		} finally {
+			if (in != null)
+				in.close();
+			if (reader != null)
+				reader.close();
+			if (br != null)
+				br.close();
+		}
+		return outpubSb;
+	}
+}

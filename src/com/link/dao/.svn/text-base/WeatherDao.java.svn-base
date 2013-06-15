@@ -1,0 +1,229 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import com.wap.sohu.mobilepaper.model.Weather;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+
+public class WeatherDao {
+	protected static Log log = LogFactory.getLog(WeatherDao.class);
+
+	protected static volatile Map<String, Map<String, Weather>> weatherMap = null;
+	protected static volatile long lastGetTime = 0;
+	public static final long cacheTime = 3600 * 1000; // 缓存一个小时
+
+	/**
+	 * 第一层的key是cityName 比如"北京" , value是个Map. 第二层map的key是日期比如"20100730" ,
+	 * value是"阵雨转晴". 结果是 今天，明天，后天的天气 使用方法:weather =
+	 * WeatherDao.getWeatherMap().get("北京").get("20100730");
+	 * */
+	public static Map<String, Map<String, Weather>> getWeatherMap() {
+		if (weatherMap != null
+				&& (System.currentTimeMillis() - lastGetTime < cacheTime)) {
+			return weatherMap;
+		} else {
+			synchronized (WeatherDao.class) {
+				if (weatherMap != null
+						&& (System.currentTimeMillis() - lastGetTime < cacheTime)) {
+					return weatherMap;
+				} else {
+					Map<String, Map<String, Weather>> tempMap = new WeatherDao().getCityNameDateWeaterMap();					
+					if(tempMap!=null && tempMap.size()>0){
+						weatherMap = tempMap;
+					}
+					lastGetTime = System.currentTimeMillis();
+					return weatherMap;
+				}
+			}
+		}
+	}
+
+	public static Weather getTodayWeaterByCityName(String cityName) {
+		Weather weather = null;
+		try {
+			Map<String, Weather> map = WeatherDao.getWeatherMap().get(cityName);
+			if (map == null) {
+				map = WeatherDao.getWeatherMap().get("北京");
+			}
+			if (map == null)
+				return weather;
+
+			weather = map.get(DateUtil.getDate("yyyyMMdd"));
+
+			// weather =
+			// WeatherDao.getWeatherMap().get(cityName).get(DateUtil.getDate("yyyyMMdd"));
+		} catch (Exception e) {
+			log.error("weather", e);
+		}
+		return weather;
+	}
+
+	public static Weather getTomorrowWeaterByCityName(String cityName) {
+		Weather weather = null;
+		try {
+			Map<String, Weather> map = WeatherDao.getWeatherMap().get(cityName);
+			if (map == null) {
+				map = WeatherDao.getWeatherMap().get("北京");
+			}
+			if (map == null)
+				return weather;
+
+			weather = map.get(DateUtil.formatToStr(
+					System.currentTimeMillis() + 24 * 3600 * 1000, "yyyyMMdd"));
+
+			// weather =
+			// WeatherDao.getWeatherMap().get(cityName).get(DateUtil.formatToStr(System.currentTimeMillis()+24*3600*1000,
+			// "yyyyMMdd"));
+		} catch (Exception e) {
+			log.error("weather", e);
+		}
+		return weather;
+	}
+
+	public Connection getWeatherDBConnection() {
+		String url = "jdbc:oracle:thin:@192.168.41.23:1521:smscore";
+		String user = "sms";
+		String password = "smsinetdrup";
+		Connection con = null;
+		try {
+			Class.forName("oracle.jdbc.driver.OracleDriver");
+			con = DriverManager.getConnection(url, user, password);
+			if (!con.isClosed())
+				log.info(" get a Physical connected ! ");
+		} catch (Exception e) {
+			log.error("error getPhysicalAirPortDataConnection()："
+					+ e.getMessage());
+		}
+		return con;
+	}
+
+	public List<Weather> getWeather() {
+		String strSql = "select city,oid,datefore,weather,temp_l,temp_h,wind,id from t_fore_webnew t1"
+				+ " where datefore>=to_char(sysdate,'yyyymmdd') and oid>0"
+				+ " order by city,datefore";
+
+		List<Weather> citys = new ArrayList<Weather>();
+		Connection con = null;
+		PreparedStatement pstmt = null;
+		try {
+			con = getWeatherDBConnection();
+			pstmt = con.prepareStatement(strSql);
+			ResultSet resultSet = pstmt.executeQuery();
+			Weather weather;
+			while (resultSet.next()) {
+				weather = new Weather();
+				weather.setCity(resultSet.getString(1));
+				weather.setOid(resultSet.getString(2));
+				weather.setDatefore(resultSet.getString(3));
+				weather.setWeather(resultSet.getString(4));
+				weather.setTemp_l(resultSet.getString(5));
+				weather.setTemp_h(resultSet.getString(6));
+				weather.setWind(resultSet.getString(7));
+				weather.setWeather_ico(weather.getWeather());
+				weather.setId(resultSet.getInt(8));
+				citys.add(weather);
+
+			}
+			return citys;
+		} catch (Exception e) {
+			log.error("getAirCitys() [error] " + e);
+		} finally {
+			try {
+				if (pstmt != null)
+					pstmt.close();
+				if (con != null)
+					con.close();
+			} catch (Exception e1) {
+				e1.printStackTrace();
+			}
+		}
+		return null;
+	}
+
+	public Map<String, Map<String, Weather>> getCityNameDateWeaterMap() {
+		Map<String, Map<String, Weather>> result = new HashMap<String, Map<String, Weather>>();
+		List<Weather> list = getWeather();
+		for (Weather weather : list) {
+			Map<String, Weather> dateWeaterMap = result.get(weather.getCity());
+			if (dateWeaterMap == null) {
+				dateWeaterMap = new HashMap<String, Weather>();
+				result.put(weather.getCity(), dateWeaterMap);
+			}
+
+			dateWeaterMap.put(weather.getDatefore(), weather);
+		}
+		return result;
+	}
+
+	/**
+	 * 生成表结构
+	 * 
+	 * @param tableName
+	 *            表名称
+	 * @return 返回表结构sql语句
+	 */
+	private String generateTableDesc(String tableName) {
+		StringBuilder sb = new StringBuilder();
+		 
+
+		try {
+			String sql = "select * from " + tableName;
+			ResultSet rs = getWeatherDBConnection().prepareStatement(sql).executeQuery();
+			ResultSetMetaData rsmd = rs.getMetaData();
+			int columnCount = rsmd.getColumnCount();
+
+			for (int i = 1; i <= columnCount; i++) {
+				sb.append(rsmd.getColumnName(i)).append("\t").append(
+						rsmd.getColumnTypeName(i)).append("(").append(
+						rsmd.getColumnDisplaySize(i)).append(")");
+				// 判断字段是否能为空
+				if (rsmd.isNullable(i) == ResultSetMetaData.columnNoNulls) {
+					sb.append(" ").append("not null");
+				}
+				// 判断字段是否递增
+				if (rsmd.isAutoIncrement(i)) {
+					sb.append(" ").append("auto_increment");
+				}
+				// 最后一列去掉逗号
+				if (i != columnCount) {
+					sb.append(", \n\t");
+				} else {
+					sb.append("\n");
+				}
+			}
+
+			sb.append(");\n");
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return sb.toString();
+	}
+
+
+	public static void main(String[] args) {
+		WeatherDao weatherDao = new WeatherDao();
+		List<Weather> list = weatherDao.getWeather();
+		for (Weather weather : list) {
+			System.out.println(weather.getOid() + "\t"
+					+ weather.getCity() + "\t" + weather.getDatefore() + "\t"
+					+ weather.getWeather());
+		}
+		System.out.println("---------------------------------------");
+		System.out.println(weatherDao.generateTableDesc("t_fore_webnew"));
+	}
+
+}

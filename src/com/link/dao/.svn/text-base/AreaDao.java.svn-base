@@ -1,0 +1,29 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Area;
+
+
+@Repository("areaDao")
+public class AreaDao extends BaseJdbcSupport {
+	public List<Area> listArea(){
+		return getJdbcTemplate()
+			.query("select * from b_area ", new dataMapper());
+	}
+	private static final class dataMapper implements RowMapper<Area> {
+		public Area mapRow(ResultSet rs, int rowNum) throws SQLException {
+			Area area = new Area();
+			area.setCode(rs.getInt("id"));
+			area.setArea(rs.getString("area"));
+			area.setProvince(rs.getString("province"));
+			area.setCity(rs.getString("city"));
+			return area;
+		}
+	}
+}

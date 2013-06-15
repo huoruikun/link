@@ -1,0 +1,107 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.UserRegist;
+
+@Repository("userRegistDao")
+public class UserRegistDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor = null;
+	
+	@PostConstruct
+	public void init(){
+		insertActor = new SimpleJdbcInsert(
+				getInterfaceJdbcTemplate().getDataSource()).withTableName("c_user_regist")
+				.usingGeneratedKeyColumns("id");
+	}
+
+	public boolean add(UserRegist ur) {
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(ur);
+		Number num = insertActor.executeAndReturnKey(parameters);
+		return num.intValue()>0?true:false;
+	}
+	
+	public void update(long cid, String name, String phone) {
+		String sql = "update c_user_regist set name=?, phone=? where cid=?";
+		getInterfaceJdbcTemplate().update(sql, name, phone, cid);
+	}
+	
+	public UserRegist find(long cid) {
+		List<UserRegist> list = getInterfaceJdbcTemplate()
+			.query("select * from c_user_regist where cid=?", new Object[]{cid}, new dataMapper());
+		if(list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public UserRegist findByRegCode(String regCode) {
+		List<UserRegist> list = getInterfaceJdbcTemplate()
+			.query("select * from c_user_regist where regCode=?", new Object[]{regCode}, new dataMapper());
+		if(list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public boolean changeScore(long cid, int num) {
+		String sql = "update c_user_regist set score=score+? where cid=?";
+		getInterfaceJdbcTemplate().update(sql, num, cid);
+		return true;
+	}
+	
+	public List<UserRegist> listFriendRegist(long cid) {
+		List<UserRegist> list = getInterfaceJdbcTemplate()
+			.query("select * from c_user_regist where fcid=? order by regDate desc limit 20", new Object[]{cid}, new dataMapper());
+		return list;
+	}
+	
+	public List<UserRegist> topScoreUser() {
+		List<UserRegist> list = getInterfaceJdbcTemplate()
+			.query("select * from c_user_regist order by score desc limit 5", new dataMapper());
+		return list;
+	}
+	
+	public void hadAwardInvite(long cid) {
+		String sql = "update c_user_regist set hadAwardInvite=1 where cid=?";
+		getInterfaceJdbcTemplate().update(sql, cid);
+	}
+	
+	public UserRegist notAwardInvite(long cid) {
+		List<UserRegist> list = getInterfaceJdbcTemplate()
+			.query("select * from c_user_regist where cid=? and hadAwardInvite=0", new dataMapper());
+		if(list != null) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	class dataMapper implements RowMapper<UserRegist> {
+
+		@Override
+		public UserRegist mapRow(ResultSet rs, int arg1) throws SQLException {
+			UserRegist ur = new UserRegist();
+			ur.setCid(rs.getLong("cid"));
+			ur.setFcid(rs.getLong("fcid"));
+			ur.setRegCode(rs.getString("regCode"));
+			ur.setScore(rs.getInt("score"));
+			ur.setName(rs.getString("name"));
+			ur.setPhone(rs.getString("phone"));
+			ur.setRegDate(rs.getTimestamp("regDate"));
+			ur.setHadAwardInvite(rs.getInt("hadAwardInvite"));
+			return ur;
+		}
+		
+	}
+}

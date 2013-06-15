@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="7335"
+   name=""
+   committed-date="2011-07-15T07:08:55.954635Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com/wap/sohu/mobilepaper/thread"
+   last-author="huoruikun"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   committed-rev="7335"
+   name="ThreadPool.java"
+   text-time="2012-03-23T02:26:17.132332Z"
+   committed-date="2011-07-15T07:08:55.954635Z"
+   checksum="3277e4c8773d80d67a293a6b259a7613"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.116714Z"/>
+<entry
+   committed-rev="7307"
+   name="Schadule.java"
+   text-time="2012-03-23T02:26:17.132332Z"
+   committed-date="2011-07-14T02:43:59.886274Z"
+   checksum="626d16229040ec814fcb4c23ccedfab7"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.116714Z"/>
+</wc-entries>

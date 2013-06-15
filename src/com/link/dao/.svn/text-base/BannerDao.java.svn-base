@@ -1,0 +1,77 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Banner;
+
+/**
+ * 客户端banner管理
+ * 
+ * @author Administrator
+ * 
+ */
+@Repository("bannerDao")
+public class BannerDao extends BaseJdbcSupport {
+
+	// 根据productId查询所有的banner列表
+	public List<Banner> getHomeBannerList(int productId) {
+		List<Banner> bannerList = null;
+		if (productId > 0) {
+			String sql = "select * from p_banner where productId=?";
+			bannerList = this.getJdbcTemplate().query(sql, new Object[] { productId }, new BannerMapper());
+
+		}
+
+		return bannerList;
+	}
+
+	// 根据productId和type 查询所有的banner列表 其中type=0为刊物banner type=1为外链banner
+	public List<Banner> getHomeBannerList(int productId, int type) {
+		List<Banner> bannerList = null;
+		if (productId > 0) {
+			String sql = "select * from p_banner where productId=? and type=?";
+			bannerList = this.getJdbcTemplate().query(sql, new Object[] { productId, type }, new BannerMapper());
+
+		}
+
+		return bannerList;
+	}
+
+	// 根据productId和type 查询所有的banner列表 其中type=0为刊物banner type=1为外链banner
+	public List<Banner> getHomeBannerList(int productId, int type, int chainLocation) {
+		List<Banner> bannerList = null;
+		if (productId > 0) {
+			String sql = "select * from p_banner where productId=? and type=? and chainLocation = ? ";
+			bannerList = this.getJdbcTemplate().query(sql, new Object[] { productId, type, chainLocation },
+					new BannerMapper());
+
+		}
+
+		return bannerList;
+	}
+
+	private class BannerMapper implements RowMapper<Banner> {
+		public Banner mapRow(ResultSet rs, int rowNum) throws SQLException {
+			Banner item = new Banner();
+			item.setId(rs.getInt("id"));
+			item.setType(rs.getInt("type"));
+			item.setPubId(rs.getInt("pubId"));
+			item.setPubName(rs.getString("pubName"));
+			item.setBgImgPath640(rs.getString("bgImgPath640"));
+			item.setBgImgPath480(rs.getString("bgImgPath480"));
+			item.setBgImgPath320(rs.getString("bgImgPath320"));
+			item.setPubImgLocation(rs.getInt("pubImgLocation"));
+			item.setChainName(rs.getString("chainName"));
+			item.setChainUrl(rs.getString("chainUrl"));
+			item.setChainLocation(rs.getInt("chainLocation"));
+			item.setProductId(rs.getInt("productId"));
+
+			return item;
+		}
+	}
+}

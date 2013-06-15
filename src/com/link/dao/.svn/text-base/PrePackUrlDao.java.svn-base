@@ -1,0 +1,63 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PrePackUrl;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.util.MyStringUtil;
+
+@Repository("prePackUrlDao")
+public class PrePackUrlDao extends BaseJdbcSupport {
+
+	private static Logger logger = Logger.getLogger(PrePackUrlDao.class);
+
+	public List<PrePackUrl> searchTermUrlList(PrePackUrl searchItem, int page, int pageSize) {
+		StringBuilder buffer = new StringBuilder(
+				"  select  pu.* from p_prepack_url  pu left join p_term_info pi on pu.termId = pi.id  ");
+		buffer.append(" where pu.isInValid =0 and  pi.published = 1   ");
+		if (searchItem.getPubId() > 0) {
+			buffer.append(" and pu.pubId = " + searchItem.getPubId());
+		}
+		if (searchItem.getTermId() > 0) {
+			buffer.append(" and pu.termId = " + searchItem.getTermId());
+		}
+		buffer.append(" and pu.isHtml = " + searchItem.getIsHtml());
+		buffer.append(" and pu.platformid = " + searchItem.getPlatformId());
+		buffer.append(" and pu.sid = " + searchItem.getSid());
+		if (StringUtils.isNotBlank(searchItem.getPubIds())) {
+			buffer.append(" and pu.pubId in  (" + searchItem.getPubIds() + ") ");
+		}
+		buffer.append(" order by pi.publishtime desc   ");
+		if (page > 0) {
+			buffer.append("limit " + (page - 1) * pageSize + " , " + pageSize);
+		}
+		logger.info("searchTermUrlList==" + buffer.toString());
+		List<PrePackUrl> list = this.getJdbcTemplate().query(buffer.toString(), new PrePackUrlMapper());
+		return list;
+	}
+
+	private class PrePackUrlMapper implements RowMapper<PrePackUrl> {
+		public PrePackUrl mapRow(ResultSet rs, int rowNum) throws SQLException {
+			PrePackUrl item = new PrePackUrl();
+			item.setId(rs.getInt("id"));
+			item.setIsValid(rs.getInt("isInValid"));
+			item.setTermId(rs.getInt("termId"));
+			item.setPubId(rs.getInt("pubId"));
+			item.setSid(rs.getInt("sid"));
+			item.setIsHtml(rs.getInt("isHtml"));
+			item.setPlatformId(rs.getInt("platformId"));
+			item.setUrl(rs.getString("url"));
+			return item;
+		}
+	}
+}

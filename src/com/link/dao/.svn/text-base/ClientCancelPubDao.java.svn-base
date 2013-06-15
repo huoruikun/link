@@ -1,0 +1,102 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ClientCancelPub;
+
+@Repository("cancelPubDao")
+public class ClientCancelPubDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor = null;
+	
+	@PostConstruct
+	public void init(){
+		insertActor = new SimpleJdbcInsert(
+				getInterfaceJdbcTemplate().getDataSource()).withTableName("c_cancel_pub")
+				.usingGeneratedKeyColumns("id");
+	}
+
+	public boolean create(ClientCancelPub cancelPub){
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(cancelPub);		
+		Number num = insertActor.executeAndReturnKey(parameters);
+		return num.intValue()>0?true:false;
+	}
+	
+	public List<ClientCancelPub> list(long cid, int productId, int cancelType){
+		String sql = "select * from c_cancel_pub where cid=? and productId=? and status=0 and cancelType=?";
+		Object[] objs = new Object[]{cid, productId, cancelType};
+		
+		if(cancelType == ClientCancelPub.CANCEL_TYPE_ANY){
+			sql = "select * from c_cancel_pub where cid=? and productId=? and status=0";
+			objs = new Object[]{cid, productId};
+		}
+		
+		return getInterfaceJdbcTemplate().query(sql, objs, new dataMapper());
+	}
+	
+	public boolean delete(long cid, int productId, int pubId){
+		return getInterfaceJdbcTemplate().update(
+				"delete from  c_cancel_pub  where cid=? and productId=? and pubId=?  ", 
+				new Object[]{cid, productId, pubId})>0 ? true : false;
+	}
+	
+	public boolean delete(long cid, int productId, int pubId,int cancelType){
+		return getInterfaceJdbcTemplate().update(
+				"delete from  c_cancel_pub  where cid=? and productId=? and pubId=? and cancelType= ? ", 
+				new Object[]{cid, productId, pubId,cancelType})>0 ? true : false;
+	}
+	
+	public ClientCancelPub find(long cid, int productId, int pubId){
+		List<ClientCancelPub> cancelPubList = getInterfaceJdbcTemplate().query(
+				"select * from c_cancel_pub where cid=? and productId=? and pubId=? and status=0", 
+				new Object[]{cid, productId, pubId},
+				new dataMapper());
+		if(cancelPubList != null && cancelPubList.size() > 0){
+			return cancelPubList.get(0);
+		}
+		return null;
+	}
+	
+	public ClientCancelPub find(long cid, int productId, int pubId,int cancelType){
+		List<ClientCancelPub> cancelPubList = getInterfaceJdbcTemplate().query(
+				"select * from c_cancel_pub where cid=? and productId=? and pubId=? and status =0 and cancelType =? ", 
+				new Object[]{cid, productId, pubId, cancelType},
+				new dataMapper());
+		if(cancelPubList != null && cancelPubList.size() > 0){
+			return cancelPubList.get(0);
+		}
+		return null;
+	}
+	
+	public void updateCancelType(long id, int cancelType) {
+		this.getInterfaceJdbcTemplate().update("update  c_cancel_pub  set cancelType = ? where id=? ",
+				new Object[] { cancelType, id }); 
+	}
+	
+	class dataMapper implements RowMapper<ClientCancelPub> {
+
+		@Override
+		public ClientCancelPub mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			ClientCancelPub x_ret = new ClientCancelPub();
+			x_ret.setId(rs.getLong("id"));
+			x_ret.setCid(rs.getLong("cid"));
+			x_ret.setProductId(rs.getInt("productId"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			x_ret.setDate(rs.getDate("date"));
+			x_ret.setCancelType(rs.getInt("cancelType"));
+			return x_ret;
+		}
+		
+	}
+}

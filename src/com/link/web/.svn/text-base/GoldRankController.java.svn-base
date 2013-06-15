@@ -1,0 +1,85 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-8 下午02:57:17
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.web;
+
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.service.GoldRankService;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.util.HeaderDataUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+
+/**
+ * @author alex.lee at 2010-11-8 下午02:57:17
+ *
+ * desc： 
+ */
+@Controller
+public class GoldRankController{
+
+	@Autowired
+	public GoldRankService goldRankService;
+	
+	@Autowired
+	public IClientService clientService;
+	
+	@RequestMapping("/goldRank.go")
+	public String goldRank(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		String cid = request.getParameter("p1");
+		try {
+			 cid = new String(Base64.decodeBase64(URLDecoder.decode(cid, "utf-8").getBytes("utf-8")));
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+		String backUrl = request.getParameter("backUrl");
+		try {
+			backUrl = URLDecoder.decode(backUrl,"utf-8");
+			model.addAttribute("backUrl2",URLEncoder.encode(backUrl,"utf-8"));
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+		model.addAttribute("backUrl",backUrl);
+		
+		int c = 0;
+		int font = 14;
+		if(StringUtils.isNotEmpty(cid)){
+			try {
+				c = Integer.parseInt(cid);
+				ClientUser clientUser = clientService.getClientUser(c);
+				  //字体大小及行高
+			    font = HeaderDataUtil.getClientSet(request).getFont();
+			    if(font ==0)
+			    	font =  PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(),clientUser.getPlatformVersion());
+			    
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		model.addAttribute("font",font);
+		model.addAttribute("golds",goldRankService.findAllGoldRank()); 
+		model.addAttribute("updateTime",GoldRankService.LASTEST_UPDATE_TIME);
+		return "gold/golds";
+	}
+	
+}

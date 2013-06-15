@@ -1,0 +1,214 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.List;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.tools.ant.util.DateUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+
+import com.wap.sohu.mobilepaper.model.ChannelNews;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.service.NewsCommentServiceImpl;
+
+public class NewsXmlUtil {
+
+	public static String getNewsListXml(List<NewsContent> newsList) {
+
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		for (NewsContent content : newsList) {
+			newsContentToElement(rootElement, "article", content, 0);
+		}
+		return doc.asXML();
+	}
+
+	public static void newsContentToElement(Element rootElement, String articleName, NewsContent content, int channelId) {
+		ArticleUtil articleUtil = new ArticleUtil();
+		Element articleElement = rootElement.addElement(articleName);
+		Dom4jUtils.addElement(articleElement, "newsId", String.valueOf(content.getId()));
+		Dom4jUtils.addElement(articleElement, "newsType", String.valueOf(content.getNewsType()));
+		if (StringUtils.isNotBlank(content.getNews().getNtime())) {
+			Dom4jUtils.addElement(articleElement, "time", content.getNews().getNtime());
+		} else if (content.getUpdateTime() != null) {
+			Dom4jUtils.addElement(articleElement, "time",
+					DateUtils.format(content.getUpdateTime(), "yyyy-MM-dd HH:mm:ss"));
+		}
+
+		if (content.getFocalNews() > 0) {
+			if (content.getNews().getFocalPic() != null) {
+				if (content.getNews().getFocalPic().size() > 0) {
+					Dom4jUtils.addElement(articleElement, "listPic",
+							articleUtil.getFocalImageUrl(content.getNews().getFocalPic().get(0)));
+				}
+			}
+		} else {
+			boolean listPicFlag = false;
+			if (content.getNews().getContentPic() != null) {
+				if (content.getNews().getContentPic().size() > 0) {
+					for (int i = 0; i < content.getNews().getContentPic().size(); i++) {
+						Image image = content.getNews().getContentPic().get(i);
+						if (NumberUtils.toInt(image.getSize(), 5000) > 10000) { // 图片大于10k才显示
+							ElementUtils.addElement(articleElement, "listPic",
+									articleUtil.getSquareImageUrlBySize(image.getUrl(), "1"));
+							listPicFlag = true;
+							break;
+						}
+					}
+				}
+			}
+			if (!listPicFlag) {
+				Dom4jUtils.addElement(articleElement, "listPic", "");
+			}
+		}
+
+		Dom4jUtils.addCDATAElement(articleElement, "title", content.getTitle());
+		Dom4jUtils.addElement(articleElement, "digNum", "0");
+		Element element = articleElement.addElement("commentNum");
+		if (content.getNid() > 0) {
+			element.setText(String.valueOf(new NewsCommentServiceImpl().getCommentCount(String.valueOf(content.getNid()))));
+		} else {
+			element.setText("-1");
+		}
+		String newsAbstract = content.getNews().getAbstract();
+		newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+		if (StringUtils.isBlank(newsAbstract)) {
+			newsAbstract = content.getNews().getContent();
+		}
+		if (StringUtils.isNotBlank(newsAbstract)) {
+			newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+			newsAbstract = ClientUtil.formatAbstractXmlToTxt(newsAbstract);
+			int end = (newsAbstract.length() > 80) ? 78 : newsAbstract.length() - 2;
+			end = (end < 0) ? 0 : end;
+			String subContent = newsAbstract.substring(0, end);
+			if (StringUtils.isNotBlank(subContent)) {
+				Dom4jUtils.addCDATAElement(articleElement, "description", subContent);
+			}
+		}
+		if (channelId > 0) {
+			String url = "news://" + channelId + "_" + content.getId();
+			if (content.getNewsType() == NewsContent.PICGROUP) {
+				url = "photo://" + channelId + "_" + content.getId();
+			}
+			Dom4jUtils.addCDATAElement(articleElement, "newsLink", url);
+		} else {
+			if (content.getNewsType() == NewsContent.LINKED && StringUtils.isNotBlank(content.getNews().getLinkUrl())) {
+				Dom4jUtils.addCDATAElement(articleElement, "newsLink", content.getNews().getLinkUrl());
+			} else if (content.getNews() != null && StringUtils.isNotBlank(content.getNews().getReferUrl())) {
+				Dom4jUtils.addCDATAElement(articleElement, "newsLink", content.getNews().getReferUrl());
+			}
+		}
+
+	}
+
+	/***
+	 * 提供一个ChannelNews对应Element
+	 * 
+	 * @param rootElement
+	 * @param articleName
+	 * @param channelNews
+	 * @param channelId
+	 * @param imgWidth
+	 * @param imgHeight
+	 */
+	public static void channelNewsToElement(Element rootElement, String articleName, ChannelNews channelNews,
+			int channelId, int imgWidth, int imgHeight) {
+		ArticleUtil articleUtil = new ArticleUtil();
+		Element articleElement = rootElement.addElement(articleName);
+		Dom4jUtils.addElement(articleElement, "newsId", String.valueOf(channelNews.getNewsContentId()));
+		Dom4jUtils.addElement(articleElement, "newsType", String.valueOf(channelNews.getNewsContent().getNewsType()));
+		if (StringUtils.isNotBlank(channelNews.getNewsContent().getNews().getNtime())) {
+			Dom4jUtils.addElement(articleElement, "time", channelNews.getNewsContent().getNews().getNtime());
+		} else if (channelNews.getNewsContent().getUpdateTime() != null) {
+			Dom4jUtils.addElement(articleElement, "time",
+					DateUtils.format(channelNews.getNewsContent().getUpdateTime(), "yyyy-MM-dd HH:mm:ss"));
+		}
+
+		// 焦点新闻
+		if (channelNews.getIsFocus() == 1 && channelNews.getFocalPic() != null
+				&& !"".equals(channelNews.getFocalPic().trim())) {
+			Dom4jUtils.addElement(articleElement, "listPic", articleUtil.getFocalImageUrl(channelNews.getFocalPic()));
+		} else {
+			// 获取组图对应的三张小图
+			if (channelNews.getNewsContent().getNewsType() == NewsContent.PICGROUP) {
+				Element listPics = articleElement.addElement("listPics");
+				for (int i = 0; i < channelNews.getNewsContent().getNews().getContentPic().size(); i++) {
+					if (i >= 3) {
+						break;
+					}
+					Image image = channelNews.getNewsContent().getNews().getContentPic().get(i);
+					ElementUtils.addElement(listPics, "listPic",
+							articleUtil.getAnyImageUrlBySize(image.getUrl(), imgWidth, imgHeight));
+
+				}
+			} else { // 图片新闻
+				boolean listPicFlag = false;
+				if (channelNews.getNewsContent().getNews().getContentPic() != null) {
+					if (channelNews.getNewsContent().getNews().getContentPic().size() > 0) {
+						for (int i = 0; i < channelNews.getNewsContent().getNews().getContentPic().size(); i++) {
+							Image image = channelNews.getNewsContent().getNews().getContentPic().get(i);
+							ElementUtils.addElement(articleElement, "listPic",
+									articleUtil.getAnyImageUrlBySize(image.getUrl(), imgWidth, imgHeight));
+							listPicFlag = true;
+							break;
+						}
+					}
+				}
+				if (!listPicFlag) {
+					Dom4jUtils.addElement(articleElement, "listPic", "");
+				}
+			}
+		}
+
+		if (channelNews.getTitle() != null && !"".equals(channelNews.getTitle().trim())) {
+			Dom4jUtils.addCDATAElement(articleElement, "title", channelNews.getTitle().trim());
+		} else {
+			Dom4jUtils.addCDATAElement(articleElement, "title", channelNews.getNewsContent().getTitle());
+		}
+		Dom4jUtils.addElement(articleElement, "digNum", "0");
+		Element element = articleElement.addElement("commentNum");
+		if (channelNews.getNewsContent().getNid() > 0) {
+			element.setText(String.valueOf(new NewsCommentServiceImpl().getCommentCount(String.valueOf(channelNews
+					.getNewsContent().getNid()))));
+		} else {
+			element.setText("-1");
+		}
+		String newsAbstract = channelNews.getNewsContent().getNews().getAbstract();
+		newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+		if (StringUtils.isBlank(newsAbstract)) {
+			newsAbstract = channelNews.getNewsContent().getNews().getContent();
+		}
+		if (StringUtils.isNotBlank(newsAbstract)) {
+			newsAbstract = ClientUtil.clearDescitionAllHtmlTag(newsAbstract);
+			newsAbstract = ClientUtil.formatAbstractXmlToTxt(newsAbstract);
+			int end = (newsAbstract.length() > 80) ? 78 : newsAbstract.length() - 2;
+			end = (end < 0) ? 0 : end;
+			String subContent = newsAbstract.substring(0, end);
+			if (StringUtils.isNotBlank(subContent)) {
+				Dom4jUtils.addCDATAElement(articleElement, "description", subContent);
+			}
+		}
+		if (channelId > 0) {
+			String url = "news://" + channelId + "_" + channelNews.getNewsContent().getId();
+			if (channelNews.getNewsContent().getNewsType() == NewsContent.PICGROUP) {
+				url = "photo://" + channelId + "_" + channelNews.getNewsContent().getId();
+			}
+			Dom4jUtils.addCDATAElement(articleElement, "newsLink", url);
+		} else {
+			if (channelNews.getNewsContent().getNewsType() == NewsContent.LINKED
+					&& StringUtils.isNotBlank(channelNews.getNewsContent().getNews().getLinkUrl())) {
+				Dom4jUtils.addCDATAElement(articleElement, "newsLink", channelNews.getNewsContent().getNews()
+						.getLinkUrl());
+			} else if (channelNews.getNewsContent().getNews() != null
+					&& StringUtils.isNotBlank(channelNews.getNewsContent().getNews().getReferUrl())) {
+				Dom4jUtils.addCDATAElement(articleElement, "newsLink", channelNews.getNewsContent().getNews()
+						.getReferUrl());
+			}
+		}
+
+	}
+}

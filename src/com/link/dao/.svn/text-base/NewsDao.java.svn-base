@@ -1,0 +1,342 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Channel;
+import com.wap.sohu.mobilepaper.model.ChannelNews;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.xml.News;
+import com.wap.sohu.mobilepaper.util.EntityChange;
+
+@SuppressWarnings("unchecked")
+@Repository("newsDao")
+public class NewsDao extends BaseJdbcSupport {
+
+	private static Logger logger = Logger.getLogger(NewsDao.class);
+
+	private String buildSearchNewsCondition(String pubIds, int pageId, int termId, int fetchRuleId, int startId,
+			int newsType) {
+		StringBuffer cond = new StringBuffer();
+
+		if (termId > 0 || pageId > 0 || StringUtils.isNotBlank(pubIds)) {
+			cond.append(" left join p_term_news tn on c.id = tn.newsId ");
+		}
+		if (StringUtils.isNotBlank(pubIds)) {
+			cond.append("  left join p_term_info ti on tn.termId = ti.id   ");
+			cond.append(" left join  p_term_page  tp on tn.pageId = tp.id   ");
+		} else {
+			cond.append(" left join  p_term_page  tp on tn.pageId = tp.id   ");
+		}
+		cond.append(" where c.is_delete = 0  ");
+		if (startId > 0) {
+			cond.append(" and  c.id > " + startId);
+		}
+		if (pageId > 0) {
+			cond.append(" and ( c.pageId = " + pageId + " or tn.pageId = " + pageId + " )");
+		} else if (fetchRuleId > 0) {
+			cond.append(" and fetchRuleId = " + fetchRuleId);
+		} else if (termId > 0) {
+			cond.append(" and tn.termId = " + termId);
+		} else if (StringUtils.isNotBlank(pubIds)) {
+			if (!NumberUtils.isNumber(pubIds)) {
+				cond.append(" and ti.termStatus = 4 and  ti.publicId in (" + pubIds + ") ");
+			} else {
+				cond.append(" and ti.termStatus = 4 and  ti.publicId = ");
+				cond.append(pubIds);
+			}
+		}
+
+		if (newsType > 0) {
+			cond.append(" and c.newsType=").append(newsType);
+		}
+
+		if (StringUtils.isNotBlank(pubIds)) {
+			cond.append(" group by c.id  order by ti.publishTime desc,tp.position,tn.position, updateTime desc ,id desc  ");
+		} else if (termId > 0) {
+			cond.append(" group by c.id  order by  tp.position,tn.position, updateTime desc ,id desc  ");
+		} else if (pageId > 0) {
+			cond.append(" group by c.id  order by c.id desc  ");
+		} else {
+			cond.append(" group by c.id  order by c.id desc  ");
+		}
+
+		return cond.toString();
+	}
+
+	public List<Integer> searchNewsIdList(String pubIds, int pageId, int termId, int fetchRuleId, int startId,
+			int page, int pageSize, int newsType) {
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select distinct(c.id) from p_news_content c ");
+
+		buffer.append(buildSearchNewsCondition(pubIds, pageId, termId, fetchRuleId, startId, newsType));
+
+		buffer.append(" limit ");
+		buffer.append((page - 1) * pageSize);
+		buffer.append(" , ");
+		buffer.append(pageSize);
+
+		logger.info("searchNewsIdList==" + buffer.toString());
+
+		return (getJdbcTemplate().queryForList(buffer.toString(), Integer.class));
+	}
+	
+	public List<ChannelNews> searchChannelNewsIdList(Channel channel, boolean showPic, int page, int pageSize) {
+		int channelId = channel.getId();
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select cn.* from p_channel_news cn, p_news_content n where cn.news_content_id=n.id and cn.channelId=");
+		buffer.append(channelId); 
+		buffer.append(" and cn.is_focus!=1 and cn.is_delete!=1");
+		if (!showPic) {
+			buffer.append(" and n.newsType!=4");
+		}
+		buffer.append(" order by cn.is_top desc, cn.last_update_time desc limit ");
+		buffer.append((page - 1) * pageSize);
+		buffer.append(" , ");
+		buffer.append(pageSize);
+
+		return getJdbcTemplate().query(buffer.toString(), new ChannelNewsDataMapper());
+	}
+	 
+	
+	public List<ChannelNews> searchChannelFocusNewsContent(int channelId, int limit) {
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select * from p_channel_news where channelId = " + channelId ); 
+		buffer.append( " and is_focus =1 and is_delete!=1 order by id desc ");
+		buffer.append(" limit "); 
+		buffer.append(limit); 
+
+		return getJdbcTemplate().query(buffer.toString(), new ChannelNewsDataMapper());
+	}
+	
+	public String getChannelNewsTitle(int channelId, int newsContentId) {
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select title from p_channel_news where channelId = " + channelId ); 
+		buffer.append( " and news_content_id = "+newsContentId+" and is_delete!=1  ");
+		buffer.append("  order by id desc limit 1 ");   
+		List<String> lists= getJdbcTemplate().queryForList(buffer.toString(),String.class);
+		if(lists!=null && lists.size()>0){
+			return lists.get(0);
+		}
+		return "";		
+	}
+
+	@Deprecated
+	public long searchNewsCount(String pubIds, int pageId, int termId, int fetchRuleId, int startId, int newsType) {
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select count(distinct(c.id)) from p_news_content c ");
+
+		buffer.append(buildSearchNewsCondition(pubIds, pageId, termId, fetchRuleId, startId, newsType));
+
+		logger.info("searchNewsCount==" + buffer.toString());
+
+		return (getJdbcTemplate().queryForLong(buffer.toString()));
+	}
+
+	/**
+	 * 根据新闻ID,获取新闻对象
+	 * 
+	 * @param newsId
+	 * @return
+	 */
+	public NewsContent getNewsContent(int newsId) {
+		List<NewsContent> lists = getJdbcTemplate().query("select * from p_news_content where id = " + newsId,
+				new NewsContentDataMapper());
+		NewsContent content = null;
+		if (lists != null && lists.size() > 0) {
+			content = lists.get(0);
+			EntityChange<News> change = new EntityChange<News>(News.class);
+			News news = change.changeToObject(content.getContent());
+			
+			if (news.getAbstract() != null) {
+				news.setAbstract(StringEscapeUtils.unescapeXml(news.getAbstract()));
+				news.setAbstract(news.getAbstract().replace("&ldquo;", "“"));
+				news.setAbstract(news.getAbstract().replace("&rdquo;", "”"));
+			}
+			
+			if (news.getContent() != null) {
+				news.setContent(StringEscapeUtils.unescapeXml(news.getContent()));
+				news.setContent(news.getContent().replace("&ldquo;", "“"));
+				news.setContent(news.getContent().replace("&rdquo;", "”"));
+			}
+			
+			content.setNews(news);
+		}
+		return content;
+	}
+
+	/**
+	 * 获取期刊中的新闻列表
+	 * @param termId 期刊ID
+	 * @param count 要获取的新闻条数
+	 * @return List<String> 只含 title字段
+	 */
+	public List<String> getTopNewsInTerm(int termId, int count) {
+		List<String> lists = new ArrayList<String>();
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(" SELECT n.title FROM `p_term_news` t left join p_news_content n  ");
+		buffer.append(" on t.newsId = n.id  where t.termNewsType = 1 and termId = ? and length(n.title) > 20 ");
+		buffer.append(" order by t.position ,t.id limit ? ");
+		lists = getJdbcTemplate().queryForList(buffer.toString(), new Object[] { termId, count }, String.class);
+		if (lists == null || lists.size() == 0) {
+			buffer = new StringBuffer();
+			buffer.append("  SELECT n.title   FROM `p_term_news` t ");
+			buffer.append("  left join p_news_content n    on t.newsId = n.id ");
+			buffer.append("  left join p_term_page tp on t.pageId = tp.id ");
+			buffer.append("  left join p_term_column tc on t.columnId = tc.id ");
+			buffer.append("  where t.termId = ?  and length(n.title) >20  order by tp.position  ,tc.position,t.position  ,t.id   limit ? ");
+			lists = (getJdbcTemplate().queryForList(buffer.toString(), new Object[] { termId, count }, String.class));
+		}
+		return lists;
+	}
+
+	public List<NewsContent> getSimpleNewsContentListInPage(int pageId, String type) {
+		StringBuilder buffer = new StringBuilder();
+		buffer.append("select  c.id,c.title,c.pageId,c.columnId,c.pubId,c.newsType from p_news_content c ");
+		buffer.append(" left join p_term_news tn on c.id = tn.newsId ");
+		buffer.append(" where c.is_delete = 0  ");
+		buffer.append(" and ( c.pageId = " + pageId + " or tn.pageId = " + pageId + " )");
+		buffer.append(" order by c.id desc limit 200 ");
+		logger.info("getSortedTermNews sql ==" + buffer.toString());
+		List<NewsContent> lists = getJdbcTemplate().query(buffer.toString(), new SimpleNewsContentRowMapper());
+		return lists;
+	}
+
+	/**
+	 * 用于计算新闻上下文，说明：不包含报纸导读和焦点图
+	 * 
+	 * @param termId
+	 * @param type
+	 * @return
+	 */
+	public List<NewsContent> getSimpleNewsContentListInTerm(int termId, String type) {
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(" select  c.id,c.title,c.pageId,c.columnId,c.pubId,c.newsType from p_term_news  tn left join p_term_page tp on tn.pageId = tp.id");
+		buffer.append(" left join p_term_column tc on tn.columnId = tc.id ");
+		buffer.append(" left join p_news_content c on tn.newsId = c.id ");
+		buffer.append(" where c.is_delete=0  and (tn.termNewsType = 0 or tn.termNewsType =2) ");
+		buffer.append(" and  tn.termId =");
+		buffer.append(termId);
+
+		if ("news".equalsIgnoreCase(type)) {
+			buffer.append(" and  ( c.newsType = ");
+			buffer.append(NewsContent.NEWLIST);
+			buffer.append("  or c.newsType=    ");
+			buffer.append(NewsContent.TEXT);
+			buffer.append("  or c.newsType=    ");
+			buffer.append(NewsContent.TITLE);
+			buffer.append(" )");
+		} else if ("photo".equalsIgnoreCase(type)) {
+			buffer.append(" and   c.newsType = ");
+			buffer.append(NewsContent.PICGROUP);
+		} else if (StringUtils.isNotBlank(type)) {
+			buffer.append(" and   c.newsType = ");
+			buffer.append(type);
+		}
+		buffer.append("  order by tp.position, tc.position,tn.position ,tn.id limit 400 ");
+		logger.info("getSortedTermNews sql ==" + buffer.toString());
+		List<NewsContent> lists = getJdbcTemplate().query(buffer.toString(), new SimpleNewsContentRowMapper());
+		return lists;
+	}
+
+	public List<NewsContent> getSimpleNewsContentList(String pubIds) {
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(" select  c.id,c.title,c.pageId,c.columnId,c.pubId,c.newsType from p_news_content c ");
+		buffer.append(" where c.is_delete=0  ");
+		if (NumberUtils.isNumber(pubIds)) {
+			buffer.append(" and pubId=  ");
+			buffer.append(pubIds);
+		} else {
+			buffer.append(" and pubId in (  ");
+			buffer.append(pubIds);
+			buffer.append(")");
+		}
+		buffer.append("  order by id desc limit 200 ");
+		logger.info("getSortedTermNews sql ==" + buffer.toString());
+		List<NewsContent> lists = getJdbcTemplate().query(buffer.toString(), new SimpleNewsContentRowMapper());
+		return lists;
+	}
+
+	public List<NewsContent> getSimpleNewsContentListByFetchRuleId(int fetchRuleId) {
+		StringBuffer buffer = new StringBuffer();
+		buffer.append(" select  c.id,c.title,c.pageId,c.columnId,c.pubId,c.newsType from p_news_content c ");
+		buffer.append(" where c.is_delete=0  ");
+
+		buffer.append(" and fetchRuleId=  ");
+		buffer.append(fetchRuleId);
+
+		buffer.append("  order by id desc limit 200 ");
+		logger.info("getSortedTermNews sql ==" + buffer.toString());
+		List<NewsContent> lists = getJdbcTemplate().query(buffer.toString(), new SimpleNewsContentRowMapper());
+		return lists;
+	}
+	 
+
+	private static final class SimpleNewsContentRowMapper implements RowMapper<NewsContent> {
+		public NewsContent mapRow(ResultSet rs, int rowNum) throws SQLException {
+			NewsContent newsContent = new NewsContent();
+			newsContent.setId(rs.getInt("id"));
+			newsContent.setPageId(rs.getInt("pageId"));
+			newsContent.setColumnId(rs.getInt("columnId"));
+			newsContent.setPubId(rs.getInt("pubId"));
+			newsContent.setTitle(rs.getString("title"));
+			newsContent.setNewsType(rs.getInt("newsType"));
+			return newsContent;
+		}
+	}
+
+	private static final class NewsContentDataMapper implements RowMapper<NewsContent> {
+		public NewsContent mapRow(ResultSet rs, int rowNum) throws SQLException {
+			NewsContent newsContent = new NewsContent();
+			newsContent.setId(rs.getInt("id"));
+			newsContent.setPageId(rs.getInt("pageId"));
+			newsContent.setColumnId(rs.getInt("columnId"));
+			newsContent.setTitle(rs.getString("title"));
+			newsContent.setContent(rs.getString("content"));
+			newsContent.setCreateTime(rs.getTimestamp("createTime"));
+			newsContent.setSenderName(rs.getString("senderName"));
+			newsContent.setUpdateTime(rs.getTimestamp("updateTime"));
+			newsContent.setEditorId(rs.getInt("editorId"));
+			newsContent.setEditorName(rs.getString("editorName"));
+			newsContent.setNid(rs.getLong("nid"));
+			newsContent.setNewsType(rs.getInt("newsType"));
+			newsContent.setFocalNews(rs.getInt("is_focalnews"));
+			newsContent.setIsDelete(rs.getInt("is_delete"));
+			newsContent.setSyncPicGroupcategoryId(rs.getInt("syncPicGroupcategoryId"));
+			return newsContent;
+		}
+	}
+	
+	private final class ChannelNewsDataMapper implements RowMapper<ChannelNews> {
+
+		@Override
+		public ChannelNews mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ChannelNews cn = new ChannelNews();
+			
+			cn.setId(rs.getInt("id"));
+			cn.setChannelId(rs.getInt("channelId"));
+			cn.setNid(rs.getString("nid"));
+			cn.setNewsContentId(rs.getInt("news_content_id"));
+			cn.setTitle(rs.getString("title"));
+			cn.setIsDelete(rs.getInt("is_delete"));
+			cn.setLastUpdateTime(new Date(rs.getTimestamp("last_update_time").getTime()));
+			cn.setCreateTime(new Date(rs.getTimestamp("create_time").getTime()));
+			cn.setIsFocus(rs.getInt("is_focus"));
+			cn.setFocalPic(rs.getString("focal_pic"));
+			
+			return cn;
+		}
+		
+	}
+
+}

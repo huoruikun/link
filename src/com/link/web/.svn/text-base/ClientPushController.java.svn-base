@@ -1,0 +1,129 @@
+package com.wap.sohu.mobilepaper.web;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionApiService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientPushController {
+
+	private static final Logger logger = Logger.getLogger(ClientPushController.class);
+
+	@Autowired
+	protected INewsService newsService;
+
+	@Autowired
+	protected ISubscriptionApiService subscriptionApiService;
+
+	@RequestMapping(value = "/push/myPush.go")
+	public String myPush(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = 100;
+		int productId = 1;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null) {
+			cid = clientUser.getCid();
+		}
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId();
+		}
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String key = HttpUtil.getRequestString(request, "key", "");
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = (subscriptionApiService.getPushJson(clientUser, productId, key));
+			RenderUtil.renderJson(response, jsonString);
+		} else if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(subscriptionApiService.getPushXml(
+					clientUser, productId, key));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response,
+					subscriptionApiService.getPushXml(clientUser, productId, key));
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/push/change.go")
+	public String change(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String ip = HttpUtil.getIpAddr(request);
+		long cid = 100;
+		int productId = 1;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null) {
+			cid = clientUser.getCid();
+		}
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId();
+		}
+		String yes = HttpUtil.getRequestString(request, "yes", "");
+		String no = HttpUtil.getRequestString(request, "no", ""); 
+		String statusCode = subscriptionApiService.changePush(productId, cid, yes, no);
+		
+		StringBuilder builder = new StringBuilder();
+		builder.append("changeSub:\t");
+		builder.append(ip);
+		builder.append("\t");
+		builder.append(DateUtil.getDate(""));
+		builder.append("\t");
+		builder.append(request.getQueryString()); 
+		builder.append("\t cid:");
+		builder.append(cid);
+		builder.append("\t yes:");
+		builder.append(yes);
+		builder.append("\t");
+		builder.append(no);
+		builder.append("\t");
+		builder.append(statusCode);
+		LogWriter.subLog(builder.toString());
+		
+	
+		String msg = "推送设置成功！";
+		if (StringUtils.isNotBlank(yes)) {
+			msg = "推送设置成功！";
+		}
+		if ("500".equalsIgnoreCase(statusCode)) {
+			msg = "推送设置失败，请稍后再试！";
+		}
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(getChangeXml(statusCode, msg));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, getChangeXml(statusCode, msg));
+		}
+		return null;
+	}
+
+	private String getChangeXml(String statusCode, String msg) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("returnStatus");
+		element.setText(statusCode);
+		element = rootElement.addElement("returnMsg");
+		element.setText(msg);
+		return doc.asXML();
+	}
+
+}

@@ -1,0 +1,236 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.wap.sohu.mobilepaper.model.ClientCancelPub;
+
+public class CommonUtils {
+
+	public static boolean isEmpty(String str){
+		if(str==null){
+			return true;
+		}
+		if(str.trim().length()==0){
+			return true;
+		}
+		return false;
+	}
+	
+	public static boolean isNotEmpty(String str){
+		return !isEmpty(str);
+	}
+	
+
+	/**
+	 * check service ip
+	 * @param ipStr
+	 * @return
+	 */
+	public static boolean checkIp(String ipStr) {
+		String[] split = ipStr.split(" ");
+		if(split.length==0){
+			return false;
+		}
+		for(String str:split){
+			String[] split2 = str.split(":");
+			if(split2.length!=2){
+				return false;
+			}
+			String[] split3 = split2[0].split("\\.");
+			if(split3.length!=4){
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	
+	    
+	public static boolean compare(String t1,String t2){
+		if(t1==null||t2==null){
+			return false;
+		}
+		
+		return t1.compareTo(t2)==0;
+	}
+
+	@SuppressWarnings("unchecked")
+	public static boolean isEmpty(List list) {
+		if(list==null||list.size()==0){
+			return true;	
+		}
+		return false;
+	}
+	@SuppressWarnings("unchecked")
+	public static boolean isNotEmpty(List list) {
+		return !isEmpty(list);
+	}
+
+	public static boolean isEmpty(String[] strs) {
+		if(strs==null||strs.length==0){
+			return true;	
+		}
+		return false;
+	}
+	
+	
+	public static String getMapValue(Map<String,String> map,String key){
+		if(map.containsKey(key)){
+			return map.get(key);
+		}
+		return "";
+	}
+	public static final String escapeHTMLTags( String input ) {
+	       //Check if the string is null or zero length -- if so, return
+	       //what was sent in.
+	       if( input == null || input.length() == 0 ) {
+	           return input;
+	       }
+	       //Use a StringBuffer in lieu of String concatenation -- it is
+	       //much more efficient this way.
+	       StringBuffer buf = new StringBuffer(input.length());
+	       char ch = ' ';
+	       for( int i=0; i<input.length(); i++ ) {
+	           ch = input.charAt(i);
+	           if( ch == '<' ) {
+	              buf.append("&lt;");
+	           }
+	           else if( ch == '>' ) {
+	              buf.append("&gt;");
+	           }
+	           else if (ch=='&') {
+	              buf.append("&amp;");
+	           }
+	           else if (ch=='"') {
+	              buf.append("&quot;");
+	           }
+	           else {
+	              buf.append( ch );
+	           }
+	       }
+	       return buf.toString();
+	    }
+	
+	
+	/**
+	 * 多个列表的合并排重
+	 * @param product_list
+	 * @return
+	 */
+	public static List<Integer> combineList(List<Integer> ... list){
+		Set<Integer> set = new HashSet<Integer>();
+		List<Integer> x_ret = null;
+		
+		if(list != null && list.length > 0){
+			for(List<Integer> temp_list : list){
+				if(temp_list != null){
+					for(Integer pubId : temp_list){
+						if(set.add(pubId)){
+							if(x_ret == null){
+								x_ret = new ArrayList<Integer>();
+							}
+							x_ret.add(pubId);
+						}
+					}
+				}
+			}
+		}
+		
+		set = null;		
+		return x_ret;
+	}
+	
+	/**
+	 * 从一个列表中滤除另一个列表的所有元素
+	 * @param <T>
+	 * @param list
+	 * @param filter_list
+	 * @return
+	 */
+	public static <T> List<T> filterList(List<T> list, List<T> filter_list){
+		if(filter_list == null || filter_list.size() == 0){
+			return list;
+		}
+		if(list != null && list.size() > 0){
+			for(T filter_obj : filter_list){
+				Iterator<T> iter = list.iterator();
+				while(iter.hasNext()){
+					T t = iter.next();
+					if(t.equals(filter_obj)){
+						iter.remove();
+					}
+				}
+			}
+		}
+		return list;
+		
+	}
+	
+	/**
+	 * 从一个list中随机取出size个元素
+	 * @param <T>
+	 * @param list
+	 * @param size
+	 * @return
+	 */
+	public static <T> List<T> getRandomList(final List<T> list, int size) {
+		int listSize = list.size();
+		if(size < 0) {
+			return null;
+		}
+		if(listSize <= size) {
+			return list;
+		}
+		
+		List<T> x_ret = new ArrayList<T>();
+		Random random = new Random();
+		
+		List<Integer> tmp = new LinkedList<Integer>();
+		for(int i=0; i<list.size(); i++) {
+			tmp.add(i);
+		}
+		for(int i=0; i<size; i++) {
+			int rdm = random.nextInt(tmp.size());
+			x_ret.add(list.get(tmp.remove(rdm)));
+		}
+		
+		return x_ret;
+	}
+	
+	public static void main(String[] args) {
+//		String s = "uid<1,2,3,4,5>;imei<111111111111117>;";
+//		Pattern p = Pattern.compile("uid<((\\d+,?)+)>;");
+//		Matcher m = p.matcher(s);
+//		if(m.find()&&m.group(1)!=null){
+//			System.out.println(m.group(1));
+//		}
+//		System.out.println("--------------------------");
+//		p = Pattern.compile("imei<((\\w+,?)+)>;");
+//		m = p.matcher(s);
+//		if(m.find()&&m.group(1)!=null){
+//			System.out.println(m.group(1));
+//		}
+		
+		
+		List<Integer> list = new ArrayList<Integer>();
+		list.add(1);
+		list.add(2);
+		list.add(3);
+		list.add(4);
+		List<Integer> filter_list = new ArrayList<Integer>();
+		filter_list.add(1);
+		filter_list.add(2);
+		
+		System.out.println(filterList(list, filter_list));
+		
+	}
+}

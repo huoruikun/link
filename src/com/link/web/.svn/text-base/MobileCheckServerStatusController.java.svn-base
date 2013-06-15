@@ -1,0 +1,73 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-9-27 上午11:44:17
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+
+/**
+ * @author alex.lee at 2010-9-27 上午11:44:17
+ *
+ * desc： 
+ */
+@Controller
+public class MobileCheckServerStatusController {
+	
+	private static String API_URL = "http://10.13.81.61/api/g.do";
+	private static String ANDROID_S_COOKIE = "cb84fe446bd60921222ba2c026bf5f331c23c0bb92e89317c453d656807365f22247712cefe9285e5df104e4625d92d3d5867d255da2afd598be98d3580b6c78a362e62601dd570a8df3e26ef02d09491cee6029322ceec018e759c58612a3dba088a60ed09279fe25fa045bd0af05a1313ccdf156ac4f20966313a066f5ebda756669ff2d51c44d10286c0e7a6e91b2";
+	private static String SYMBIAN_S_COOKIE = "ea1a63ea6fa190f7e294c5dc11447343fb5e9819216e8b4227b0bd0a111cd042de9b56b651d9e8a0f35a6df640fcb7e42faa96f4de57ea6d3cf5bb59903e13c8d6a26ecfdaafa7a75d5495b6e407cc3f782a6e3a4c4ec9f1b642bf4b2adb9f85ac0e14cc2b9cd047895fa43a8e263789";
+	private static String WMOBILE_S_COOKIE = "8bf7f6cf8e5bf707489f1dbe185191000504c15ddebce49b6c44665ab663c893e6ea35f71c7d8987e2ec328912a0828c573785936dffc352ffa91a6c324e5c8046d66e217f5f7bd41ae64b1c7e14cbf90fcd5256dca821136017c567a05dea7225ab6f757991a9d0a274293d6788b06be1c4230c214774878059dcce1a0b26d2";
+	private static String IPHONE_S_COOKIE = "";
+	
+	@RequestMapping("/checkServerStatus.go")
+	public void  checkServerStatus(int type,HttpServletRequest request,HttpServletResponse response, 
+				Model model){
+		String xml = "";
+		String sCookie = "";
+		Map<String,String> header = new HashMap<String,String>();
+		
+		if(type ==1){ //android
+			sCookie = ANDROID_S_COOKIE;
+		}else if(type ==2){ //symbian
+			sCookie = SYMBIAN_S_COOKIE;
+		}else if(type ==3){ //windowsMobile
+			sCookie = WMOBILE_S_COOKIE;
+		}else if(type ==4){ //iphone
+			sCookie = IPHONE_S_COOKIE;
+		}
+		
+		header.put("s_cookie", sCookie);
+		xml = HttpUtil.get(API_URL, header, "utf-8");
+//		model.addAttribute("xml", xml);
+		PrintWriter out = null;
+		try {
+			out = response.getWriter();
+			byte[] data = xml.getBytes("utf-8");
+			response.setContentLength(data.length);
+			response.setContentType("text/plain; charset=UTF-8");
+			out.print(xml);
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+//		return "serverStatus/serverStatus";
+	}
+}

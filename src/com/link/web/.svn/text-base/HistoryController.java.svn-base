@@ -1,0 +1,369 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.net.URLDecoder;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.ProductShowPub;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.service.ClientServiceImpl;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.HeaderDataUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+
+@Controller
+public class HistoryController {
+	@Autowired
+	protected IClientService clientService;
+
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+
+	@RequestMapping(value = "/history.go", params = "m=listOld")
+	public String list(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+
+		response.setHeader("Pragma", "no-cache");
+		response.addHeader("Cache-Control", "no-cache");
+		response.setDateHeader("Expires", 0);
+
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		List<PublicationTerm> termList = clientService.publishedHistory(pubId);
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser == null) {
+			clientUser = new ClientUser();
+
+			try {
+				String p3 = request.getParameter("p3");
+				if (StringUtils.isNotEmpty(p3)) {
+					String param = new String(Base64.decodeBase64(URLDecoder.decode(p3, "utf-8").getBytes("utf-8")));
+					String params[] = param.split("&");
+
+					try {
+						for (String para : params) {
+							if (para.startsWith("f")) {
+								clientUser.setPlatform(para.split("=")[1]);
+							} else if (para.startsWith("g")) {
+								clientUser.setPlatformVersion(para.split("=")[1]);
+							} else if (para.startsWith("h")) {
+								clientUser.setResolution(para.split("=")[1]);
+							} else if (para.startsWith("i")) {
+								clientUser.setMachineId(para.split("=")[1]);
+							}
+						}
+					} catch (Exception e1) {
+
+					}
+
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		// 字体大小及行高
+		int font = HeaderDataUtil.getClientSet(request).getFont();
+		if (font == 0)
+			font = PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(), clientUser.getPlatformVersion());
+
+		String lineHeight = font > 14 ? "2" : "1.5";
+		model.addAttribute("font", font);
+		model.addAttribute("fontsize", font);
+		model.addAttribute("lineHeight", lineHeight);
+
+		List<PublicationTerm> newList = new ArrayList<PublicationTerm>();
+		for (PublicationTerm term : termList) {
+			// 取得显示用刊物信息，viewPub
+			//int term_viewpubId = term.getPublicId();
+			Publication publicaiton = clientService.getPublication(term.getPublicId());
+			//if (publicaiton != null && publicaiton.getViewPubId() > 0) {
+			//	Publication viewPub = clientService.getPublication(publicaiton.getViewPubId());
+			//	term_viewpubId = viewPub.getId();
+			//}
+
+			int modelType = clientService.getModelTypeNew(clientUser);
+
+			if (clientUser.getMatchArea() == 0) {
+				clientUser.setMatchArea(74);
+			}
+
+			int zipPolicy = publicaiton.getZipPolicy();
+
+			String url = PaperUtil.getHtmlUrl(SysConfig.PAGE_STATIC_URL_ROOT, term.getPublicId(), term.getId(),
+					term.getPublishTime(), modelType, clientUser.getMatchArea(), "mpaperhome_1_" + term.getId()
+							+ "_1.html", zipPolicy, 0, 0, 0, 0);
+
+			try {
+				if (DateUtil.getDate(term.getPublishTime(), "yyyy-MM-dd").compareTo("2011-02-14") < 0) {
+					url = PaperUtil.getHtmlUrl(SysConfig.PAGE_STATIC_URL_ROOT, term.getPublicId(), term.getId(),
+							term.getPublishTime(), modelType, clientUser.getMatchArea(), "mpaperhome_1_" + term.getId()
+									+ "_1.html");
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+			try {
+				if (DateUtil.getDate(term.getPublishTime(), "yyyy-MM-dd").compareTo("2010-11-26") < 0) {
+					url = url.replaceAll("221.179.173.198", "221.179.173.175");
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+				continue;
+			}
+			if (!HttpUtil.openUrl(url)) {
+				url = PaperUtil.getHtmlUrl(SysConfig.PAGE_STATIC_URL_ROOT, term.getPublicId(), term.getId(),
+						term.getPublishTime(), modelType, 74, "mpaperhome_1_" + term.getId() + "_1.html", zipPolicy, 0,
+						0, 0, 0);
+
+				try {
+					if (DateUtil.getDate(term.getPublishTime(), "yyyy-MM-dd").compareTo("2011-02-14") < 0) {
+						url = PaperUtil.getHtmlUrl(SysConfig.PAGE_STATIC_URL_ROOT, term.getPublicId(), term.getId(),
+								term.getPublishTime(), modelType, 74, "mpaperhome_1_" + term.getId() + "_1.html");
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+				if (!HttpUtil.openUrl(url))
+					continue;
+			}
+			term.setHtmlUrl(url);
+			newList.add(term);
+		}
+		model.addAttribute("termList", newList);
+
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId != SysConfig.MODEL_INFO_ID)
+				return "history/historyTouch";
+		} catch (Exception e) {
+		}
+		return "history/history";
+	}
+
+	@RequestMapping(value = "/history.go", params = "m=listHtml")
+	public String listNew(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		response.setHeader("Pragma", "no-cache");
+		response.addHeader("Cache-Control", "no-cache");
+		response.setDateHeader("Expires", 0);
+
+		String pubIds = request.getParameter("pubIds");
+		int productId = HttpUtil.getRequestInt(request, "u", 0);
+		String backUrl = request.getParameter("backUrl");
+		int pageSize = HttpUtil.getRequestInt(request, "ps", 20);
+		if (pageSize > 30) {
+			pageSize = 30;
+		}
+		int pageNumber = HttpUtil.getRequestInt(request, "pn", 1);
+		
+		try {
+			String subIdStr = request.getParameter("subId");
+			if (subIdStr != null && !"".equals(subIdStr)) {
+				int subId = Integer.parseInt(subIdStr);
+				List<Integer> pIdList = subscriptionService.getPubIdListBySubId(subId);
+				if (pIdList != null && pIdList.size() > 0) {
+					String tmp = "";
+					for (Integer pubId : pIdList) {
+						tmp += "," + pubId;
+					}
+					pubIds = tmp.substring(1);
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		ClientUser clientUser = clientService.getClientUserFromRequest(request);
+		boolean isSelfAnalysis = false;
+		// 字体大小及行高
+		int font = 0;
+		if (HeaderDataUtil.getClientSet(request) != null) {
+			font = HeaderDataUtil.getClientSet(request).getFont();
+		}
+		if (font == 0)
+			font = PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(), clientUser.getPlatformVersion());
+
+		String lineHeight = font > 14 ? "2" : "1.5";
+
+		List<PublicationTerm> termList = null;
+
+		termList = listHistoryByPubIdProductId(productId, pubIds, clientUser,
+				isSelfAnalysis, (pageNumber - 1) * pageSize, pageSize);
+
+		model.addAttribute("font", font);
+		model.addAttribute("lineHeight", lineHeight);
+		model.addAttribute("termList", termList);
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("Publication", getShowPublicationInHistory(pubIds));
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("PubIds", pubIds);
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId != SysConfig.MODEL_INFO_ID)
+				return "history/historyTouch";
+		} catch (Exception e) {
+		}
+		return "history/history";
+	}
+
+	@RequestMapping(value = "/history.go", params = "m=list")
+	public String listHistorySelf(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		response.setHeader("Pragma", "no-cache");
+		response.addHeader("Cache-Control", "no-cache");
+		response.setDateHeader("Expires", 0);
+
+		String pubIds = request.getParameter("pubIds");
+		int productId = HttpUtil.getRequestInt(request, "u", 1);
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		String backUrl = request.getParameter("backUrl");
+		int pageNum = HttpUtil.getRequestInt(request, "pageNum", 1);
+		int pageSize = 30;
+		int hasNextPage = 0;
+		
+		List<Integer> pubIdList = null;
+		try {
+			pubIdList = subscriptionService.getPubIdListBySubId(subId, pubIds);
+			if (pubIdList == null || pubIdList.size() == 0) {
+				pubIdList = clientService.getProductShowPubList(productId, ProductShowPub.TYPE_HISTORY);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		ClientUser clientUser = clientService.getClientUserFromRequest(request);
+		List<PublicationTerm> termList = clientService.getLatestTerms(pubIdList, clientUser, true, (pageNum - 1) * pageSize, pageSize + 1);
+		if(termList != null && termList.size() == pageSize + 1){
+			hasNextPage = 1;
+		}
+		
+		for (PublicationTerm term : termList) {
+			term.setHtmlUrl(SysConfig.API_SERVER.concat("paper/term.go?termId=") + term.getId());
+		}
+		// 字体大小及行高
+		int font = 0;
+		if (HeaderDataUtil.getClientSet(request) != null) {
+			font = HeaderDataUtil.getClientSet(request).getFont();
+		}
+		if (font == 0)
+			font = PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(), clientUser.getPlatformVersion());
+
+		String lineHeight = font > 14 ? "2" : "1.5";
+
+		model.addAttribute("font", font);
+		model.addAttribute("lineHeight", lineHeight);
+		model.addAttribute("termList", termList);
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("Publication", getShowPublicationInHistory(pubIds));
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("PubIds", pubIds);
+		model.addAttribute("PageNum", pageNum);
+		model.addAttribute("HasNextPage", hasNextPage);
+
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId != SysConfig.MODEL_INFO_ID)
+				return "history/historyTouch";
+		} catch (Exception e) {
+		}
+		return "history/history";
+	}
+
+	private Publication getShowPublicationInHistory(String s_pubId) {
+		try {
+			int pubId = ParseUtil.paseInt(s_pubId, 0);
+			if (pubId > 0) {
+				return clientService.getPublication(pubId);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private List<PublicationTerm> listHistoryByPubIdProductId(int productId, String pubIds, ClientUser clientUser,
+			boolean isSelfAnalysis, int start, int size) {
+
+		List<PublicationTerm> termList = null;
+
+		List<Integer> pub_list = new ArrayList<Integer>();
+
+		if (pubIds != null && pubIds.length() > 0) {// 取指定pubIds的往期
+			String[] a_pubIds = pubIds.split(",");
+			if (a_pubIds != null) {
+				for (String s_pubId : a_pubIds) {
+					try {
+						int pubId = ParseUtil.paseInt(s_pubId, 0);
+						if (pubId > 0) {//
+							pub_list.add(pubId);
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		} else {
+			// 查询该产品下可以查看往期的刊物，获取刊物列表
+			if (productId <= 0) {
+				productId = 1;// 如果没有任何刊物，也没有产品信息，默认查看早晚报产品
+			}
+			pub_list = clientService.getProductShowPubList(productId, ProductShowPub.TYPE_HISTORY);
+		}
+
+		pub_list = CommonUtils.combineList(pub_list);
+
+		termList = clientService.listHistoryByPubList(pub_list, 0, clientUser, isSelfAnalysis, start, size);
+
+		return termList;
+	}
+
+	@RequestMapping(value = "/history.go", params = "m=listXml")
+	public String listXml(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int count = HttpUtil.getRequestInt(request, "count", 0);
+		int pageSize = HttpUtil.getRequestInt(request, "ps", 20);
+		if (pageSize > 30) {
+			pageSize = 30;
+		}
+		int pageNumber = HttpUtil.getRequestInt(request, "pn", 1);
+		boolean isSelfAnalysis = false;
+		ClientUser clientUser = clientService.getClientUserFromRequest(request);
+
+		Document doc = DocumentHelper.createDocument();
+		Element root_el = doc.addElement("root");
+		List<PublicationTerm> term_list = clientService.listHistory(pubId,
+				count, clientUser, isSelfAnalysis, (pageNumber - 1) * pageSize,
+				pageSize);
+		if (term_list != null) {
+			for (PublicationTerm term : term_list) {
+				try {
+					root_el.add(term.asXml());
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		model.addAttribute("Content", root_el.asXML());
+		return "history/content";
+	}
+
+}

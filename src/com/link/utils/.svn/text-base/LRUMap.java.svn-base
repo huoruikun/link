@@ -1,0 +1,153 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+public class LRUMap<K,V> {
+	private Log log = LogFactory.getLog(getClass());
+	private int lrutime = 60;//second
+	private int exptime = 3600;//second
+	private Map<K, LRUEntry<V>>  map = new ConcurrentHashMap<K, LRUEntry<V>>();
+	private String name ;
+
+	/**
+	 * @param lruTime seconds
+	 * @param expTime seconds
+	 */
+	public LRUMap(String name,int lruTime,int expTime){
+		this.lrutime = lruTime;
+		this.exptime = expTime;
+		this.name=name;
+		startLRUDeamo();
+	}
+
+	private void startLRUDeamo() {
+		new Thread(){
+			public void run(){
+				while(true){
+					try {
+						Thread.sleep(lrutime*1000);
+						lru();
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}.start();
+	}
+
+	private void lru(){
+		for(Entry<K,LRUEntry<V>> entry:map.entrySet()){
+			K key = (K)entry.getKey();
+			LRUEntry<V> lurobj = (LRUEntry<V>)entry.getValue();
+			if(getCurentTime()-lurobj.getTime()>=exptime){
+				map.remove(key);
+			}
+		}
+		log.debug("["+name+"]LURMap lur."+map.size());
+	}
+
+	public void put(K k, V v){
+		 map.put(k, new LRUEntry<V>(v));
+	}
+	
+	public void remove(K k){
+		 map.remove(k);
+	}
+
+
+	@SuppressWarnings("unchecked")
+	public V get(Object k){
+		V v = null;
+		Object obj = map.get(k);
+		if(obj!=null){
+			LRUEntry<V> entry = (LRUEntry<V>)obj;
+			if(getCurentTime()-entry.getTime()<exptime){
+				v = entry.getValue();
+			}else{
+				map.remove(k);
+			}
+		}
+		return v;
+	}
+
+	public Set<java.util.Map.Entry<K, V>> entrySet() {
+		Map<K,V> remap = new HashMap<K,V>();
+		for(Entry<K,LRUEntry<V>> entry:map.entrySet()){
+			LRUEntry<V> obj = entry.getValue();
+			if(getCurentTime()-obj.getTime()<exptime){
+				remap.put(entry.getKey(), obj.getValue());
+			}
+		}
+		return remap.entrySet();
+	}
+
+	@SuppressWarnings("hiding")
+	private class LRUEntry<V>{
+		private V v ;
+		private int timestamp ;
+		public LRUEntry(V v){
+			this.v=v;
+			timestamp = getCurentTime();
+		}
+
+		public V getValue(){
+			return v;
+		}
+
+		public int getTime(){
+			return timestamp;
+		}
+	}
+
+	public int size(){
+		return map.size();
+	}
+
+	private int getCurentTime(){
+		return new Long(System.currentTimeMillis()/1000).intValue();
+	}
+
+
+	//test
+	public static void main(String[] args) {
+		LRUMap<String,String> map = new LRUMap<String,String>("test",30,300);
+		for(int i=1;i<=10;i++){
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			map.put("k"+i,"v"+i);
+		}
+		System.out.println("->"+map.size());
+		try {
+			Thread.sleep(1000*10);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		for(int i=0;i<100;i++){
+			int k=0;
+			for(int j=1;j<=10;j++){
+				k++;
+				System.out.println(k+":"+map.get("k"+j));
+			}
+			System.out.println("--------------------------");
+			try {
+				Thread.sleep(1000*1);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+		}
+
+
+	}
+}

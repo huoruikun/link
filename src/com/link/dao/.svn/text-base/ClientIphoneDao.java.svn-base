@@ -1,0 +1,38 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ClientUser;
+
+@Repository("clientIphoneDao")
+public class ClientIphoneDao extends BaseJdbcSupport {
+
+	public long save(final ClientUser user,final int pid,final int type) {
+		try{
+			final String ADD_SQL = "INSERT INTO c_client_iphone(cid,token,pid,type )values(?,?,?,?) ON DUPLICATE KEY UPDATE token='"+user.getToken()+"'";
+			KeyHolder keyHolder = new GeneratedKeyHolder();
+			this.getInterfaceJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection.prepareStatement(ADD_SQL,
+							new String[] { "cid,token,pid,type" });
+					ps.setLong(1, user.getCid());
+					ps.setString(2, user.getToken());
+					ps.setInt(3, pid);
+					ps.setInt(4, type);
+					return ps;
+				}
+			}, keyHolder);
+			return keyHolder.getKey().longValue();
+		}catch(Exception e){
+		}
+		return 0;
+	}
+}

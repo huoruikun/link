@@ -1,0 +1,307 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.sf.json.JSONObject;
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.NewsComment;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.UserLeaveMessage;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.INewsCommentService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientCommentController {
+
+    private static final Logger logger = Logger.getLogger(ClientCommentController.class);
+
+    @Autowired
+    protected INewsService newsService;
+
+    @Autowired
+    protected IClientService clientService;
+
+    @Autowired
+    protected INewsCommentService newsCommentService;
+
+    public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+            "clientNewsCache");
+    public static final int COMMENT_CALLBACK_CONTENT_EXPIRE_TIME = 60 * 60 * 2;// 取到内容的缓存时间
+
+    /**
+     * 获取评论列表
+     * @param model
+     * @param request
+     * @param response
+     * @return
+     */
+    @RequestMapping(value = "/comment/list.go")
+    public String commentList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+        int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+        int groupPicId = HttpUtil.getRequestInt(request, "gid", 0);
+        
+        String rt = HttpUtil.getRequestString(request, "rt");
+        List<NewsComment> list = new ArrayList<NewsComment>();
+        //NewsContent newsContent = null;
+        //if(newsId > 0) {
+        //	newsContent = newsService.getNewsContent(newsId);
+        //}        
+        String nid = newsCommentService.getCommentIdByNewsIdOrGroupPicId(newsId, groupPicId);
+        
+        if (nid != null) {
+            int p = HttpUtil.getRequestInt(request, "page", 1);
+            int pageSize = HttpUtil.getRequestInt(request, "num", 10);
+            // 新接口第一页参数为 1(原来为0) , p-1改为 p  [add by jianbozhu 2012年3月9日11时17分52秒]
+            int index = p;
+            list = newsCommentService.getCommentList(nid, index, pageSize, false);
+
+            ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+            if (clientUser != null && clientUser.getCid() > 0) {
+                LogWriter.commentLog(DateUtil.getDate("")+"\t list\t newsId:" + newsId + "\t nid:" + nid + "\t uid:" + clientUser.getCid() + "\t"
+                        + clientUser.getPlatform());
+            }
+        }
+        if ("json".equalsIgnoreCase(rt)) {
+            String jsonString = (getCommentListJson(list));
+            RenderUtil.renderJson(response, jsonString);
+        } else if ("json1".equals(rt)) {
+            String jsonString = JSonUtil.getJSONStringFromXml(getCommentList(list));
+            RenderUtil.renderJson(response, jsonString);
+        } else {
+            RenderUtil.renderXml(response, getCommentList(list));
+        }
+        return null;
+    }
+
+    @RequestMapping(value = "/comment/save.go")
+    public String commentSave(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+        String statusCode = "200";
+        ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+        ClientInstall clientInstall = (ClientInstall) request.getAttribute("clientInstall");
+        int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+        int groupPicId = HttpUtil.getRequestInt(request, "gid", 0);
+        if (clientUser != null && clientUser.getCid() > 0) {
+        	// 通过newsContent或者groupPicId获取commentId
+        	String commentId = newsCommentService.getCommentIdByNewsIdOrGroupPicId(newsId, groupPicId);
+        	String commentKey = "comment_v1_" + clientUser.getCid() + "_" + commentId;
+            String m = "";
+            if (clientNewsCache != null) {
+                m = (String) clientNewsCache.get(commentKey);
+            }
+            if (!"1".equalsIgnoreCase(m)) {
+                String commentContent = HttpUtil.getRequestString(request, "content");
+                if (!"".equalsIgnoreCase(commentId)) {
+                    NewsComment comment = new NewsComment();
+                    comment.setContent(commentContent);
+                    comment.setCtime(new SimpleDateFormat("MM/dd HH:mm").format(new Date()));
+                    comment.setPassport(null);
+                    comment.setPostIp("13800000001");
+                    comment.setAuthor("搜狐新闻客户端网友");
+                    //moto变态需求
+                    if(clientInstall!=null ){ 
+                    	  System.out.println("comment save channelId:"+clientInstall.getCurrentChannelId());
+                    	  comment.setAuthor(getCommentAuthor(clientInstall.getCurrentChannelId()));
+                    }
+                    comment.setNid(commentId);
+                    boolean x_ret = newsCommentService.addComment(comment);
+                    if (!x_ret) {
+                        statusCode = "403";
+                    }
+                    if (clientNewsCache != null) {
+                        clientNewsCache.set(commentKey, 45, "1");
+                    }
+                    LogWriter.commentLog(DateUtil.getDate("")+"\t save newsId:" + newsId +"\t nid:" + commentId + "\t uid:" + clientUser.getCid() + "\t"
+                            + clientUser.getPlatform() + "\t" + commentContent);
+                } else {
+                    statusCode = "404";
+                }
+            } else {
+                statusCode = "405";
+            }
+        } else { // 用户不存在
+            statusCode = "401";
+        }
+        String rt = HttpUtil.getRequestString(request, "rt");
+        if ("json".equalsIgnoreCase(rt)) {
+            String jsonString = JSonUtil.getJSONStringFromXml(getSaveReturnXml(statusCode));
+            RenderUtil.renderJson(response, jsonString);
+        } else {
+            RenderUtil.renderXml(response, getSaveReturnXml(statusCode));
+        }
+        return null;
+    }
+    
+    private String getCommentAuthor(int channelId){
+		if (channelId == 6034 || channelId == 6038) {
+			return "摩托罗拉锋芒智能手机网友";
+		} else if (channelId == 6037) {
+			return "LGTD智能手机网友";
+		} else if (channelId == 6039) {
+			return "摩托罗拉锋丽智能手机网友";
+		}
+    	return "搜狐新闻客户端网友";
+    }
+
+    @RequestMapping(value = "/feedback/save.go")
+    public String saveFeedback(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+        UserLeaveMessage comment = new UserLeaveMessage();
+        String statusCode = "200";
+        if (StringUtils.isNotBlank(HttpUtil.getRequestString(request, "content"))) {
+            comment.setProductId(HttpUtil.getRequestInt(request, "productId", 0));
+            comment.setContent(HttpUtil.getRequestString(request, "content"));
+            comment.setPhone(HttpUtil.getRequestString(request, "phone"));
+            comment.setPhoneBrand(HttpUtil.getRequestString(request, "phoneBrand"));
+            comment.setPubId(HttpUtil.getRequestInt(request, "pubId", 0));
+            comment.setTermId(HttpUtil.getRequestInt(request, "termId", 0));
+            comment.setType(HttpUtil.getRequestInt(request, "type", 0));
+            comment.setLeaveTime(new Date().getTime());
+            ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+            if (clientUser != null) {
+                comment.setCid(clientUser.getCid());
+                comment.setImei(clientUser.getIMEI());
+            }
+            boolean x_ret = clientService.addUserLeaveMessage(comment);
+            if (!x_ret) {
+                statusCode = "500";
+            }
+        } else {
+            statusCode = "404";
+        }
+        String rt = HttpUtil.getRequestString(request, "rt");
+        if ("json".equalsIgnoreCase(rt)) {
+            String jsonString = JSonUtil.getJSONStringFromXml(getSaveFeedBackXml(statusCode));
+            RenderUtil.renderJson(response, jsonString);
+        } else {
+            RenderUtil.renderXml(response, getSaveFeedBackXml(statusCode));
+        }
+
+        return null;
+    }
+
+    @RequestMapping(value = "/comment/callback.go")
+    public String commentCallback(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+        String commentNewsId = HttpUtil.getRequestString(request, "id", "2800000001");
+        String commentCallback = "";
+        String key = "m_comment_callback_" + commentNewsId + "_v3";
+        if (clientNewsCache != null) {
+            commentCallback = (String) clientNewsCache.get(key);
+        }
+        if (StringUtils.isBlank(commentCallback)) {
+            commentCallback = newsCommentService.getCommentCallBack(commentNewsId);
+            clientNewsCache.set(key, COMMENT_CALLBACK_CONTENT_EXPIRE_TIME, commentCallback);
+        }
+        RenderUtil.renderText(response, commentCallback, "encoding:GBK");
+        return null;
+    }
+
+    private String getSaveFeedBackXml(String statusCode) {
+        Document doc = DocumentHelper.createDocument();
+        doc.setXMLEncoding("UTF-8");
+        Element rootElement = doc.addElement("root");
+        Element element = rootElement.addElement("returnStatus");
+        element.setText(statusCode);
+        element = rootElement.addElement("returnMsg");
+        element.setText(getFeedBackStatusMsg(statusCode));
+        return doc.asXML();
+    }
+
+    private String getSaveReturnXml(String statusCode) {
+        Document doc = DocumentHelper.createDocument();
+        doc.setXMLEncoding("UTF-8");
+        Element rootElement = doc.addElement("root");
+        Element element = rootElement.addElement("returnStatus");
+        element.setText(statusCode);
+        element = rootElement.addElement("returnMsg");
+        element.setText(getStatusMsg(statusCode));
+        return doc.asXML();
+    }
+
+    public String getStatusMsg(String statusCode) {
+        if ("401".equalsIgnoreCase(statusCode)) {
+            return "评论审核中.."; // 用户不存在
+        } else if ("404".equalsIgnoreCase(statusCode)) {
+            return "评论审核中..."; // 该新闻不存在
+        } else if ("405".equalsIgnoreCase(statusCode)) {
+            return "评论间隔太短，请稍后再发!!!"; // 发表太频繁（45秒内一个用户只能发表一个评论）
+        } else if ("403".equalsIgnoreCase(statusCode)) {
+            return "评论发布失败!";
+        } else if ("200".equalsIgnoreCase(statusCode)) {
+            return "发表成功 正在审核中";
+        }
+        return "评论发布失败";
+    }
+
+    public String getFeedBackStatusMsg(String statusCode) {
+        if ("404".equalsIgnoreCase(statusCode)) {
+            return "用户反馈内容为空";
+        } else if ("403".equalsIgnoreCase(statusCode)) {
+            return "发表失败!";
+        } else if ("200".equalsIgnoreCase(statusCode)) {
+            return "发表成功 谢谢你的意见反馈";
+        }
+        return "发表失败";
+    }
+
+    private String getCommentList(List<NewsComment> list) {
+        Document doc = DocumentHelper.createDocument();
+        doc.setXMLEncoding("UTF-8");
+        Element rootElement = doc.addElement("root");
+        if (list != null)
+            for (NewsComment nc : list) {
+                Element paperElement = rootElement.addElement("comment");
+                Element element = paperElement.addElement("ctime");
+                element.setText(nc.getCtime());
+                Dom4jUtils.addCDATAElement(paperElement, "author", nc.getAuthor());
+                Dom4jUtils.addCDATAElement(paperElement, "content", nc.getContent());
+            }
+        return doc.asXML();
+    }
+
+    private String getCommentListJson(List<NewsComment> list) {
+    	JSONObject commentJson = new JSONObject();
+        if (list != null) {
+        	List<JSONObject> items = new LinkedList<JSONObject>();
+            for (NewsComment nc : list) {
+            	JSONObject item = new JSONObject();
+                item.element("ctime", nc.getCtime());
+                item.element("author", JSonUtil.jsonCharFilter(nc.getAuthor()));
+                item.element("content", JSonUtil.jsonCharFilter(nc.getContent()));
+                items.add(item);
+            }
+            commentJson.element("comment", items);
+        }
+        return commentJson.toString();
+    }
+}

@@ -1,0 +1,244 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.sf.json.JSONObject;
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.apache.tools.ant.util.DateUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.Channel;
+import com.wap.sohu.mobilepaper.model.ChannelNews;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.service.IChannelService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.NewsCommentServiceImpl;
+import com.wap.sohu.mobilepaper.util.ArticleUtil;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.ElementUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.NewsJsonUtil;
+import com.wap.sohu.mobilepaper.util.NewsXmlUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientChannelNewsController {
+
+	private static final Logger logger = Logger.getLogger(ClientChannelNewsController.class);
+
+	@Autowired
+	protected INewsService newsService;
+	@Autowired
+	protected IChannelService channelService;
+
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+
+	public static final int NEWS_CONTENT_EXPIRE_TIME = 60 * 60 * 2;// 取到内容的缓存时间
+	public static final int NEWS_LIST_EXPIRE_TIME = 30;// 取到内容的缓存时间
+
+	@RequestMapping(value = "/channel/list.go")
+	public String list(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		List<Channel> listChannel = channelService.listChannel();
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = (getChannelListJson(listChannel));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, getChannelList(listChannel));
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/channel/news.go")
+	public String newsList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int channelId = HttpUtil.getRequestInt(request, "channelId", 1);
+
+		int page = HttpUtil.getRequestInt(request, "page", 1);
+		int pageSize = HttpUtil.getRequestInt(request, "num", 20);
+		int imgWidth = HttpUtil.getRequestInt(request, "imgWidth", 180);
+		int imgHeight = HttpUtil.getRequestInt(request, "imgHeight", 0);
+		boolean groupPic = isShowGroupPic(request);
+		int picScale = HttpUtil.getRequestInt(request, "picScale", 1);
+		if (picScale == 2 && imgHeight == 0) {
+			imgHeight = (int) (imgWidth / 1.375);
+		}
+		if (imgHeight == 0) {
+			imgHeight = imgWidth;
+		}
+		String rt = HttpUtil.getRequestString(request, "rt");
+		StringBuilder builder = new StringBuilder();
+		builder.append(channelId);
+		builder.append("_");
+		builder.append(groupPic);
+		builder.append("_");
+		builder.append(picScale);
+		builder.append("_");
+		builder.append(page);
+		builder.append("_");
+		builder.append(pageSize);
+		builder.append("_");
+		builder.append(rt);
+		builder.append("_");
+		builder.append("v2");
+		String key = builder.toString();
+		String returnValue = "";
+		if (clientNewsCache != null) {
+			returnValue = (String) clientNewsCache.get(key);
+		}
+		if (StringUtils.isNotEmpty(returnValue)) {
+			logger.info("news in memcache" + "\t" + key);
+			RenderUtil.renderXml(response, returnValue);
+		} else {
+			Channel channel = channelService.getChannel(channelId);
+			List<ChannelNews> focusNewsList = newsService.searchChannelFocusNewsContent(channelId, 2);
+			List<ChannelNews> newsList = newsService.searchChannelNewsContent(channel, groupPic, page, pageSize);
+			if ("json".equals(rt)) {
+				String jsonString = getNewsListJson(channel, focusNewsList, newsList, imgWidth, imgHeight);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, NEWS_LIST_EXPIRE_TIME, jsonString);
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				String xmlString = getNewsListXml(channel, focusNewsList, newsList, imgWidth, imgHeight);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, NEWS_LIST_EXPIRE_TIME, xmlString);
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 根据客户端提交的参数，判断是否显示组图
+	 * 
+	 * @param request
+	 * @return
+	 */
+	private boolean isShowGroupPic(HttpServletRequest request) {
+		boolean groupPic = HttpUtil.getRequestInt(request, "groupPic", 0) == 1 ? true : false;
+		int showPic = HttpUtil.getRequestInt(request, "showPic", 0);
+		if (groupPic== false && showPic > 0) {
+			groupPic = true;
+		}
+		return groupPic;
+	}
+
+	public String getNewsListXml(Channel channel, List<ChannelNews> focusNewsList, List<ChannelNews> newsList,
+			int imgWidth, int imgHeight) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		int channelId = channel.getId();
+		Dom4jUtils.addElement(rootElement, "channelId", String.valueOf(channelId));
+		if (channelId <= 1) {
+			Dom4jUtils.addElement(rootElement, "selection", "1");
+		} else {
+			Dom4jUtils.addElement(rootElement, "selection", "0");
+		}
+		if (focusNewsList != null && focusNewsList.size() > 0) {
+			Element focusElement = rootElement.addElement("focals");
+			for (ChannelNews content : focusNewsList) {
+				NewsXmlUtil.channelNewsToElement(focusElement, "focal_news", content, channelId, 0, 0);
+			}
+		}
+		for (ChannelNews content : newsList) {
+			NewsXmlUtil.channelNewsToElement(rootElement, "article", content, channelId, imgWidth, imgHeight);
+		}
+		return doc.asXML();
+	}
+
+	public String getNewsListJson(Channel channel, List<ChannelNews> focusNewsList, List<ChannelNews> newsList,
+			int imgWidth, int imgHeight) {
+		JSONObject json = new JSONObject();
+		int channelId = channel.getId();
+		json.element("channelId", String.valueOf(channelId));
+		if (channelId <= 1) {
+			json.element("selection", "1");
+		} else {
+			json.element("selection", "0");
+		}
+
+		NewsJsonUtil newsJsonUtil = new NewsJsonUtil();
+		if (focusNewsList != null && focusNewsList.size() > 0) {
+			List<JSONObject> focusJsonList = new ArrayList<JSONObject>();
+			for (ChannelNews channelNews : focusNewsList) {
+				focusJsonList.add(newsJsonUtil.channelNewsToJson(channelNews, channelId, imgWidth, imgHeight));
+			}
+
+			json.element("focals", focusJsonList);
+		}
+
+		if (newsList != null && newsList.size() > 0) {
+			List<JSONObject> articleJsonList = new ArrayList<JSONObject>();
+			for (ChannelNews content : newsList) {
+				if (channel.getId() == 1) { // 暂时为了iPhone要闻区
+					try {
+						if (content.getNewsContent().getNews().getContentPic().size() == 0) {
+							continue;
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+				articleJsonList.add(newsJsonUtil.channelNewsToJson(content, channelId, imgWidth, imgHeight));
+			}
+			json.element("articles", articleJsonList);
+		}
+
+		return json.toString();
+	}
+
+	private String getChannelList(List<Channel> list) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		int i = 1;
+		if (list != null) {
+			for (Channel nc : list) {
+				Element paperElement = rootElement.addElement("channel");
+				Dom4jUtils.addPropertyElement(paperElement, "id", String.valueOf(nc.getId()));
+				Dom4jUtils.addPropertyElement(paperElement, "name", nc.getName());
+				Dom4jUtils.addPropertyElement(paperElement, "position", String.valueOf(i++));
+				// 增加字段icon
+				Dom4jUtils.addPropertyElement(paperElement, "icon", nc.getIconUrl());
+			}
+		}
+		return doc.asXML();
+	}
+
+	private String getChannelListJson(List<Channel> list) {
+		JSONObject commentJson = new JSONObject();
+		if (list != null) {
+			List<JSONObject> items = new LinkedList<JSONObject>();
+			for (Channel nc : list) {
+				JSONObject item = new JSONObject();
+				item.element("id", String.valueOf(nc.getId()));
+				item.element("name", JSonUtil.jsonCharFilter(nc.getName()));
+				// 增加字段icon
+				item.element("icon", nc.getIconUrl());
+				items.add(item);
+			}
+			commentJson.element("channel", items);
+		}
+		return commentJson.toString();
+	}
+}

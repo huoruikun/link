@@ -1,0 +1,525 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientNetTime;
+import com.wap.sohu.mobilepaper.model.ClientSet;
+import com.wap.sohu.mobilepaper.model.ClientSubscribe;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.PSendTime;
+import com.wap.sohu.mobilepaper.model.UserSubscribe;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.SoftUpdateUtil;
+
+@Repository("clientUserDao")
+public class ClientUserDao extends BaseJdbcSupport {
+	
+	@Autowired
+	private ClientSubscribeDao clientSubscribeDao;
+	
+	@Autowired
+	private UserSubscribeDao userSubscribeDao;
+	   
+	public void batchUpdate(final List<String> batchUpdate) {
+		if (batchUpdate == null || batchUpdate.size() == 0) {
+			return;
+		}
+		String[] ss = new String[batchUpdate.size()];
+		int i = 0;
+		for (String s : batchUpdate) {
+			ss[i] = s;
+			i++;
+		}
+		getInterfaceJdbcTemplate().batchUpdate(ss);
+	}
+	
+	public void updateIphone(String sql){
+		this.getInterfaceJdbcTemplate().update(sql);
+	}
+	public void insertIphone(final String sql){
+		KeyHolder keyHolder = new GeneratedKeyHolder();
+		try {
+			this.getInterfaceJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection
+							.prepareStatement(sql);
+					return ps;
+				}
+			}, keyHolder);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public long save(final ClientUser user , HttpServletRequest request) {
+		final String ADD_SQL = "INSERT INTO c_client_info(IMEI,"
+				+ "platform,platformVersion,machineId,"
+				+ "passport,matchArea,resolution,firstVisit,network,install_time )values(?,?,?,?,?,?,?,?,?,?)";
+		KeyHolder keyHolder = new GeneratedKeyHolder();
+		try {
+			this.getInterfaceJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection
+							.prepareStatement(
+									ADD_SQL,
+									new String[] { "IMEI,"
+											+ "platform,platformVersion,machineId,"
+											+ "passport,matchArea,resolution,firstVisit,network,install_time" });
+					ps.setString(1, user.getIMEI());
+					ps.setString(2, user.getPlatform());
+					ps.setString(3, user.getPlatformVersion());
+					ps.setString(4, user.getMachineId());
+					
+					ps.setString(5, user.getPassport());
+					ps.setInt(6, user.getMatchArea());
+					ps.setString(7, user.getResolution());
+					ps.setTimestamp(8, new Timestamp(System.currentTimeMillis()));
+					if(user.getNetwork()!=null &&user.getNetwork().length()>31){
+						ps.setString(9, user.getNetwork().substring(0,30));
+						System.out.println("error IMEI info network long ::"+user.getIMEI()+"\t"+user.getNetwork()+">");
+					}else{
+						ps.setString(9, user.getNetwork());
+					}
+					ps.setTimestamp(10, new Timestamp(user.getInstallTime()));
+					
+					return ps;
+				}
+			}, keyHolder);
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.out.println("error IMEI info ======================<"+user.getIMEI()+"\t"+user.getNetwork()+">");
+		}
+		
+		
+		// 添加用户安装的产品
+		long cid = keyHolder.getKey().longValue();
+		ClientInstall clientInstall = (ClientInstall)request.getAttribute("clientInstall");
+		try{
+			addUserInstall(  cid, clientInstall);
+			
+			ClientUser userLog = new ClientUser();
+			userLog.setCid(cid);
+			userLog.setPlatform(user.getPlatform());
+			userLog.setPlatformVersion(user.getPlatformVersion());
+			
+			SoftUpdateUtil.getInstance().save2UpgradeLog(userLog, clientInstall, null);//有新的产品安装时记录一下安装信息
+			
+			
+		}catch(Exception e){
+			e.printStackTrace();
+			System.out.println("error addUserInstall ===================cid productId channelId==="+cid+" "+clientInstall.getProductId()+" "+clientInstall.getChannelId() );
+		}
+		
+		return cid;
+	}
+	
+	public void addUserInstall(final long cid,final ClientInstall clientInstall){
+		String channelStr = String.valueOf(clientInstall.getChannelId());
+		
+		if(channelStr!=null && !channelStr.startsWith("5") && !channelStr.startsWith("6")  ){
+			clientInstall.setIsActive(1); // 不需要激活
+		}
+		if(clientInstall.getIsActive() == 1) {
+			clientInstall.setActive_time(new Timestamp(System.currentTimeMillis())); // 激活时间就是现在
+		}
+		
+		final String ADD_SQL = "INSERT INTO c_client_install ( cid,productId,channelId,version,is_active,lastVisit,installTime,apiVersion,currentChannelId, active_time) " +
+				"values(?,?,?,?,?,?,?,?,?,?)";
+		
+		LogWriter.runlog("sql_user_install add : "+DateUtil.getDate("")+" : "+ADD_SQL);
+		
+		this.getInterfaceJdbcTemplate().update(new PreparedStatementCreator() {
+			public PreparedStatement createPreparedStatement(
+					Connection connection) throws SQLException {
+				PreparedStatement ps = connection.prepareStatement(ADD_SQL,
+						new String[] { "cid,productId,channelId,version,is_active,lastVisit,installTime,apiVersion,currentChannelId, active_time" });
+				ps.setLong(1, cid);
+				ps.setInt(2, clientInstall.getProductId());
+				ps.setInt(3, clientInstall.getChannelId());
+				ps.setString(4, clientInstall.getVersion());
+				ps.setInt(5, clientInstall.getIsActive());
+				ps.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
+				ps.setTimestamp(7, new Timestamp(System.currentTimeMillis()));
+				ps.setInt(8, clientInstall.getApiVersion());
+				ps.setInt(9, clientInstall.getChannelId());
+				ps.setTimestamp(10, (Timestamp) clientInstall.getActive_time());
+				return ps;
+			}
+		});
+	}
+
+	public long findByIMEI(String imei) {
+		String SQL = "select id from c_client_info where IMEI='" + imei + "'";
+		List<Long> list = this.getInterfaceJdbcTemplate().query(SQL, new dataMapper());
+		if (CommonUtils.isNotEmpty(list)) {
+			return list.get(0);
+		}
+		return 0;
+	}
+	
+	
+	
+	public long findByTokenByCid(long cid,int pid) {
+		String SQL = "select id from c_client_iphone where cid='" + cid + "' and pid = "+pid;
+		List<Long> list = this.getInterfaceJdbcTemplate().query(SQL, new dataMapper());
+		if (CommonUtils.isNotEmpty(list)) {
+			return list.get(0);
+		}
+		return 0;
+	}
+	
+	public long findToken(String token) {
+		String SQL = "select if from c_client_iphone where token=?";
+		List<Long> list = this.getInterfaceJdbcTemplate().query(SQL, new Object[]{token}, new dataMapper());
+		if (CommonUtils.isNotEmpty(list)) {
+			return list.get(0);
+		}
+		return 0;
+	}
+
+	public List<ClientUser> list() {
+		String SQL = "select * from c_client_info where lastVisit > '"
+				+ DateUtil.getPreDay() + "'";
+		List<ClientUser> list = this.getInterfaceJdbcTemplate().query(SQL,
+				new dataMapper2());
+		return list;
+	}
+
+	public ClientUser findById(long cid) {
+		String SQL = "select * from c_client_info where id = " + cid;
+		List<ClientUser> list = this.getInterfaceJdbcTemplate().query(SQL,
+				new dataMapper2());
+		if (CommonUtils.isNotEmpty(list)) {
+			ClientUser user =  list.get(0);
+			
+			
+			// 获得用户安装的产品信息
+			String SQL_INSTALL = "select * from c_client_install where cid = " + cid + " order by id ";
+			List<ClientInstall> listInstall = this.getInterfaceJdbcTemplate().query(SQL_INSTALL,
+					new dataMapperInstall());
+			HashMap<Integer,ClientInstall> userInstallProducIdChannelIdMap = new HashMap<Integer,ClientInstall>();
+			HashMap<Integer,Integer> apiVersionMap = new HashMap<Integer,Integer>();
+			for(ClientInstall clientInstall : listInstall){
+				userInstallProducIdChannelIdMap.put(clientInstall.getProductId(), clientInstall);
+				apiVersionMap.put(clientInstall.getProductId(), clientInstall.getApiVersion());
+			}
+			user.setUserInstallProducIdChannelIdMap(userInstallProducIdChannelIdMap);
+			user.setApiVersionMap(apiVersionMap);
+			
+			//  获得用户设置的map
+			HashMap<Integer,ClientSet> userSetMap = new HashMap<Integer,ClientSet>();
+			List<ClientSet> userSetList = findClientSet(cid);
+			if(userSetList!=null){
+				for(ClientSet clientSet: userSetList){
+					userSetMap.put(clientSet.getProductId(), clientSet);
+				}
+			}
+			user.setUserSetMap(userSetMap);
+			
+			
+			// 获得用户订的阅的刊物列表 pubList
+			List<ClientSubscribe> clientSubscribeList =  clientSubscribeDao.find(cid);
+			HashMap<Integer,ArrayList<Integer>> producIdUserSubscribeMap = new HashMap<Integer,ArrayList<Integer>>();
+			HashMap<Integer,ArrayList<Integer>> producIdUserSubscribeNoPushMap = new HashMap<Integer,ArrayList<Integer>>();
+			
+			// 将查询结果封装到 producIdUserSubscribeMap中
+			for(ClientSubscribe clientSubscribe : clientSubscribeList){
+				if(clientSubscribe.getIsPush() == ClientSubscribe.IS_PUSH){
+					ArrayList<Integer> listUserSub = producIdUserSubscribeMap.get(clientSubscribe.getProductId());
+					if(listUserSub==null){
+						// 每次循环, 初始化一次listUserSub
+						listUserSub = new ArrayList<Integer>();
+						// Map的数据结构为: HashMap<Integer,ArrayList<Integer>>
+						producIdUserSubscribeMap.put(clientSubscribe.getProductId(), listUserSub);
+					}
+					listUserSub.add(clientSubscribe.getPubId());
+				}else if(clientSubscribe.getIsPush() == ClientSubscribe.NO_PUSH){
+					ArrayList<Integer> listUserSubNoPush = producIdUserSubscribeNoPushMap.get(clientSubscribe.getProductId());
+					if(listUserSubNoPush==null){
+						listUserSubNoPush = new ArrayList<Integer>();
+						producIdUserSubscribeNoPushMap.put(clientSubscribe.getProductId(), listUserSubNoPush);
+					}
+					listUserSubNoPush.add(clientSubscribe.getPubId());
+				}
+			}
+			user.setProducIdUserSubscribeMap(producIdUserSubscribeMap);
+			user.setProducIdUserSubscribeNoPushMap(producIdUserSubscribeNoPushMap);
+			// LogWriter.log("****************************************************" +"producIdUserSubscribeMap size() = "+producIdUserSubscribeMap.size());
+			
+			//获取用户订阅的subId
+			Map<Integer,List<UserSubscribe>>  subListMap = userSubscribeDao.getUserSubscribeListMap(cid);
+			user.setSubscribeList(subListMap);
+			
+			return user;
+		}
+		return null;
+	}
+
+	public List<ClientSet> findClientSet(long cid) {
+		String SQL = "select * from c_client_set where cid = " + cid;
+		List<ClientSet> list = this.getInterfaceJdbcTemplate().query(SQL,
+				new dataMapper3());
+		return list;
+	}
+	
+	public ClientSet findClientSet(long cid,int productId) {
+		String SQL = "select * from c_client_set where cid = " + cid+" and productId="+productId;
+		List<ClientSet> list = this.getInterfaceJdbcTemplate().query(SQL,
+				new dataMapper3());
+		if(list!=null && list.size()>0){
+			return list.get(0);
+		}
+		return new ClientSet();
+	}
+
+	public void updateClientSet(long cid, final ClientSet clientSet) {
+		ClientSet _clientSet = findClientSet(cid,clientSet.getProductId());
+		if (_clientSet.getId() == 0) {
+			final String ADD_SQL = "INSERT INTO c_client_set(cid,area,font,image,close,zipPolicy,isCloseMsgPaper,productId)values(?,?,?,?,?,?,?,?)";
+			
+			LogWriter.runlog("sql_updateClientSet add : "+DateUtil.getDate("")+" : "+ADD_SQL);
+			
+			this.getInterfaceJdbcTemplate().update(new PreparedStatementCreator() {
+				public PreparedStatement createPreparedStatement(
+						Connection connection) throws SQLException {
+					PreparedStatement ps = connection.prepareStatement(ADD_SQL,
+							new String[] { "cid,area,font,image,close" });
+					ps.setLong(1, clientSet.getCid());
+					ps.setInt(2, clientSet.getArea());
+					ps.setInt(3, clientSet.getFont());
+					ps.setInt(4, clientSet.getImage());
+					ps.setInt(5, clientSet.getClose());
+					ps.setInt(6, clientSet.getZipPolicy());
+					ps.setInt(7, clientSet.getIsCloseMsgPaper());
+					ps.setInt(8, clientSet.getProductId());
+					return ps;
+				}
+			});
+		} else {
+			String set = "";
+			if (clientSet.getArea() > 0) {
+				set += " area = " + clientSet.getArea() + ",";
+			}
+			if (clientSet.getFont() > 0) {
+				set += " font = " + clientSet.getFont() + ",";
+			}
+			if (clientSet.getImage() > 0) {
+				set += " image = " + clientSet.getImage() + ",";
+			}
+			if (clientSet.getClose() > 0) {
+				set += " close = " + clientSet.getClose() + ",";
+			}
+			if (clientSet.getZipPolicy() >= -1) {
+				set += " zipPolicy = " + clientSet.getZipPolicy() + ",";
+			}
+			if (clientSet.getIsCloseMsgPaper() > 0) {
+				set += " isCloseMsgPaper = " + clientSet.getIsCloseMsgPaper() + ",";
+			}
+			if (clientSet.getProductId() > 0) {
+				set += " productId = " + clientSet.getProductId() + ",";
+			}
+				
+			
+			if (set.length() > 1) {
+				set = set.substring(0, set.length() - 1);
+				String SQL = "update c_client_set set " + set + " where  cid=?  and productId="+clientSet.getProductId();
+				
+				LogWriter.runlog("sql_updateClientSet update : "+DateUtil.getDate("")+" : "+SQL+cid);
+				//System.out.println(SQL);
+				this.getInterfaceJdbcTemplate().update(SQL, cid);
+			}
+		}
+
+	}
+
+	@SuppressWarnings("unchecked")
+	public List<ClientNetTime> getClientNextNetTimes(int dateType) {
+		String SQL = "select * from c_net_time where date_type=?";
+		return this.getInterfaceJdbcTemplate().query(SQL, new Object[]{dateType},
+				new DataMapper5()); 
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<PSendTime> getPSendTimes(int type) {
+		String SQL = "select * from p_send_time where type = " +type +" order by send_time ";
+		return this.getInterfaceJdbcTemplate().query(SQL,
+				new DataMapper6());
+	}
+	
+	public void updateClientUserActive(long cid){
+		String SQL = "update c_client_info set is_active = 1,active_time=? where id=?";
+		this.getInterfaceJdbcTemplate().update(SQL, new Timestamp(System.currentTimeMillis()),cid);
+	}
+	
+	private class DataMapper6<T> implements RowMapper<PSendTime> {
+		public PSendTime mapRow(ResultSet rs, int rowNum) throws SQLException {
+			PSendTime sendTime = new PSendTime();
+			sendTime.setSendTime(rs.getString("send_time"));
+			sendTime.setType(rs.getInt("type"));
+			sendTime.setPubId(rs.getInt("pubId"));
+			return sendTime;
+		}
+	}
+	
+	
+	private class DataMapper5<T> implements RowMapper<ClientNetTime> {
+		public ClientNetTime mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientNetTime clientNetTime = new ClientNetTime();
+			clientNetTime.setNextMinute(rs.getInt("next_minute"));
+			//clientNetTime.setGotMinute(rs.getInt("got_minute"));
+			clientNetTime.setStartHour(rs.getString("start_hour"));
+			clientNetTime.setEndHour(rs.getString("end_hour"));
+			//clientNetTime.setStartDate(rs.getString("start_date"));
+			//clientNetTime.setEndDate(rs.getString("end_date"));
+			clientNetTime.setDateType(rs.getInt("date_type"));
+			clientNetTime.setPubId(rs.getInt("pubId"));
+			return clientNetTime;
+		}
+	}
+	
+	private class dataMapper implements RowMapper<Long> {
+		public Long mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getLong("id");
+		}
+	}
+	
+	private class dataMapper4 implements RowMapper<Long> {
+		public Long mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getLong("cid");
+		}
+	}
+
+	private class dataMapper2 implements RowMapper<ClientUser> {
+		public ClientUser mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientUser user = new ClientUser();
+			user.setCid(rs.getLong("id"));
+			user.setIMEI(rs.getString("IMEI"));
+			user.setPlatform(rs.getString("platform"));
+			user.setPlatformVersion(rs.getString("platformVersion"));
+			user.setMachineId(rs.getString("machineId"));
+			user.setResolution(rs.getString("resolution"));
+			user.setMatchArea(rs.getInt("matchArea"));
+			
+			return user;
+		}
+	}
+	
+	private class dataMapperInstall implements RowMapper<ClientInstall> {
+		public ClientInstall mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientInstall clientInstall = new ClientInstall(); 
+			clientInstall.setCid(rs.getLong("cid"));
+			clientInstall.setProductId(rs.getInt("productId"));
+			clientInstall.setChannelId(rs.getInt("channelId"));
+			clientInstall.setCurrentChannelId(rs.getInt("currentChannelId"));
+			clientInstall.setIsActive(rs.getInt("is_active"));
+			clientInstall.setVersion(rs.getString("version"));
+			clientInstall.setApiVersion(rs.getInt("apiVersion"));
+			clientInstall.setInstallTime(rs.getDate("installTime"));
+			return clientInstall;
+		}
+	}
+	
+	
+
+	private class dataMapper3 implements RowMapper<ClientSet> {
+		public ClientSet mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientSet user = new ClientSet();
+			user.setId(rs.getInt("id"));
+			user.setCid(rs.getLong("cid"));
+			user.setArea(rs.getInt("area"));
+			user.setFont(rs.getInt("font"));
+			user.setImage(rs.getInt("image"));
+			user.setZipPolicy(rs.getInt("zipPolicy"));
+			user.setProductId(rs.getInt("productId"));
+			
+			user.setIsCloseMsgPaper(rs.getInt("isCloseMsgPaper"));
+			
+			
+			return user;
+		}
+	}
+	
+	private class DataMapper7 implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getInt("pubId");
+		}
+	}
+
+	private class CidDataMapper implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getInt("cid");
+		}
+	}
+	
+	public long findByToken(String token) {
+		String SQL = "select cid from c_client_iphone where token='" + token + "'";
+		List<Long> list = this.getInterfaceJdbcTemplate().query(SQL, new dataMapper4());
+		if (CommonUtils.isNotEmpty(list)) {
+			return list.get(0);
+		}
+		return 0;
+	}
+
+	public List<Integer> getPubsByChannelId(String channelId) {
+		String SQL = "select pubId from o_channel_pub where channelId = '" +channelId+"'" ;
+		return this.getInterfaceJdbcTemplate().query(SQL,
+				new DataMapper7());
+	}
+	
+	public List<Integer> getActiveUserIds(Integer beginCid, Integer endCid) {
+		String TAG = Thread.currentThread().getName();
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Calendar calendar = new GregorianCalendar();
+		calendar.setTime(new Date());
+		calendar.add(5, -2);
+		String dateTime = sdf.format(calendar.getTime()) + " 00:00:00";
+		
+		if(beginCid == null)
+			beginCid = 0;
+		if(endCid == null)
+			endCid = 999999;
+		
+		String SQL = "select distinct(cid)  from c_client_install where lastVisit > '"+ dateTime +"' and is_active=1 and cid>=" +  beginCid + " and cid<=" + endCid;
+		System.out.println(TAG + " getActiveUserIds:"+SQL);
+		return this.getInterfaceJdbcTemplate().query(SQL,
+				new CidDataMapper());
+	}
+	
+	public boolean isActiveUser(long cid, int productId, Date startDate) {
+		String SQL = "select * from c_client_install where cid=? and productId=? and lastVisit>?";
+		List<ClientInstall> list = getInterfaceJdbcTemplate().query(
+				SQL, 
+				new Object[]{cid, productId, startDate},
+				new dataMapperInstall());
+		if (CommonUtils.isNotEmpty(list)) {
+			return true;
+		}
+		return false;
+	}
+}

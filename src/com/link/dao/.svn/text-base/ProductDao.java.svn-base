@@ -1,0 +1,40 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Product;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+
+@Repository("productDao")
+public class ProductDao extends BaseJdbcSupport {
+	
+	public Product find(int productId){
+		List<Product> list = getJdbcTemplate().query("select * from p_product where id=?", 
+				new Object[]{productId}, new dataMapper());
+		if(CommonUtils.isNotEmpty(list)){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public List<Product> list(){
+		return getJdbcTemplate().query("select * from p_product", new dataMapper());
+	}
+	
+	class dataMapper implements RowMapper<Product>{
+
+		@Override
+		public Product mapRow(ResultSet rs, int arg1) throws SQLException {
+			Product x_ret = new Product();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setName(rs.getString("productName"));
+			return x_ret;
+		}
+		
+	}
+}

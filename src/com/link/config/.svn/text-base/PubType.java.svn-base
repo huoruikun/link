@@ -1,0 +1,34 @@
+package com.wap.sohu.mobilepaper.conf;
+
+/**
+ * 刊物类别
+ *
+ * @author jtong
+ */
+public enum PubType {
+    MoningPaper(0), EveningPaper(1), subscribePaper(2), msgPaper(3);
+
+    PubType(int v) {
+        this.value = v;
+    }
+
+    int value = 0;
+
+    public int getValue() {
+        return value;
+    }
+
+    public static PubType getPubType(int v) {
+        switch (v) {
+            case 0:
+                return PubType.MoningPaper;
+            case 1:
+                return PubType.EveningPaper;
+            case 2:
+                return PubType.subscribePaper;
+            case 3:
+                return PubType.msgPaper;
+        }
+        return null;
+    }
+}

@@ -1,0 +1,293 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-24 上午09:53:28
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang.StringUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+
+import com.wap.sohu.mobilepaper.conf.ScookieType;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+
+/**
+ * @author alex.lee at 2010-11-24 上午09:53:28
+ * 
+ *         desc：
+ */
+public class ClientUtil {
+
+	// private static LRUMap<String,List<PublicationTerm>> test_published_map =
+	// new LRUMap<String,List<PublicationTerm>>("published",30,120);
+
+	/**
+	 * 是否为测试手机
+	 * 
+	 * @param imei
+	 * @return
+	 */
+	public static boolean isTestPhone(String imei) {
+		if (SysConfig.IS_TEST_MODEL == 1) { // 测试机接收测试接口数据
+			if (StringUtils.isNotEmpty(imei) && SysConfig.TEST_IMEI != null && SysConfig.TEST_IMEI.size() > 0
+					&& SysConfig.TEST_IMEI_SET.contains(imei)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static String getCheckTestPub(ClientUser clientUser, String result, String messageClass) {
+		String resu = "";
+		if (result.startsWith("0,") && clientUser.getCid() > 0) {
+			try {
+				System.out.println("request test app check :=======" + DateUtil.getDate("") + ";" + SysConfig.TEST_APP
+						+ "check.do?b=" + clientUser.getCid() + "&t=" + messageClass + ",test imei:"
+						+ clientUser.getIMEI() + ",cid:" + clientUser.getCid());
+
+				resu = HttpUtil.get(SysConfig.TEST_APP + "check.do?b=" + clientUser.getCid() + "&t=" + messageClass,
+						null, "utf-8");
+				System.out.println("result data:======" + resu);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		return resu;
+	}
+
+	public static String getTestServerData(ClientUser clientUser, String content, String messageClass, String testServer) {
+		String xml = "";
+		// System.out.println("test phone======for it");
+		if (content == null) {
+			content = "";
+		}
+		if (content.indexOf(".zip") == -1) {
+			try {
+				// System.out.println("request test app g.do:=======" +
+				// DateUtil.getDate("") + ";" + SysConfig.TEST_APP
+				// + "g.do?m102=" + messageClass + ",test imei:" +
+				// clientUser.getIMEI() + ",cid:"
+				// + clientUser.getCid());
+				// System.out.println("request test app g.do:=======scookie:" +
+				// clientUser.getS_cookie());
+
+				Map<String, String> header = new HashMap<String, String>();
+				ScookieType scookieType = clientUser.getScookieType();
+				if (scookieType != null && scookieType == ScookieType.WINPHONE) {
+					header.put("WPSCOOKIE", getTestSCookieHeader(clientUser.getS_cookie()));
+				}else {
+					header.put("SCOOKIE", getTestSCookieHeader(clientUser.getS_cookie()));
+				}
+				if (StringUtils.isEmpty(testServer)) {
+					xml = HttpUtil.get(SysConfig.TEST_APP + "g.do?m102=" + messageClass, header, "utf-8");
+				} else {
+					xml = HttpUtil.get(testServer + "g.do?m102=" + messageClass, header, "utf-8");
+				}
+				System.out.println("testServer=="+testServer+"\t"+xml);
+			} catch (Exception e) {
+				e.printStackTrace();
+				xml = null;
+			}
+		} else {// 当前环境（上线后为正式环境）有报纸，则直接返回正式内容
+			return content;
+		}
+
+		if (StringUtils.isEmpty(xml) || content.indexOf(".zip") != -1)
+			xml = content;
+
+		if (StringUtils.isNotEmpty(messageClass) && StringUtils.isNotEmpty(xml)) {
+			String testTermId = "";
+			if (clientUser.getProtocol() == 2) {
+				if (xml.indexOf("<value>") != -1 && xml.indexOf("</value>") != -1)
+					testTermId = xml.substring(xml.indexOf("<value>") + 7, xml.indexOf("</value>"));
+
+				xml = xml.replaceAll("<update>(.*)?</update>", ""); // 去掉升级信息
+			}
+
+			if (clientUser.getProtocol() == 3) {
+				if (xml.indexOf("<b><b1>") != -1 && xml.indexOf("</b1></b>") != -1)
+					testTermId = xml.substring(xml.indexOf("<b><b1>") + 7, xml.indexOf("</b1></b>"));
+
+				xml = xml.replaceAll("<c>(.*)?</c>", ""); // 去掉升级信息
+			}
+
+			if (testTermId.indexOf("_") != -1)
+				testTermId = testTermId.substring(testTermId.indexOf("_") + 1);
+
+			if (StringUtils.isNotEmpty(testTermId)) {
+				if (messageClass.indexOf("_") != -1) {
+					String[] termsId = testTermId.split(",");
+
+					String[] hasGetId = messageClass.substring(messageClass.indexOf("_") + 1).split(",");
+
+					boolean isHas = false;
+					for (String term : termsId) {
+						isHas = false;
+
+						for (String getId : hasGetId) {
+							if (getId.equals(term)) {
+								isHas = true;
+								break;
+							}
+						}
+
+						if (isHas == false) {
+							messageClass = messageClass + "," + term;
+						}
+					}
+				}
+			}
+
+			if (clientUser.getProtocol() == 2) {
+				xml = xml.replaceAll("<value>(.*)?</value>", "<value>" + messageClass + "</value>");
+			}
+
+			if (clientUser.getProtocol() == 3) {
+				xml = xml.replaceAll("<b><b1>(.*)?</b1></b>", "<b><b1>" + messageClass + "</b1></b>");
+			}
+		}
+		return xml;
+	}
+
+	public static String getTestSCookieHeader(String sCookieLong) {
+		String sCookieShort = ToolsAesCrypt.Decrypt(sCookieLong, "2D2AE7C87C712EB5");
+		String temp = StringUtils.substringBetween(sCookieShort, "b=", "&");
+		sCookieShort = sCookieShort.replace("b=" + temp + "&", "b=&");
+		System.out.println("testServer==newScookie="+sCookieShort);
+		try {
+			return ToolsAesCrypt.Encrypt(sCookieShort, "2D2AE7C87C712EB5");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return sCookieLong;
+	}
+
+	public static String getReturnXml(String statusCode, String msg) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("returnStatus");
+		element.setText(statusCode);
+		element = rootElement.addElement("returnMsg");
+		element.setText(msg);
+		return doc.asXML();
+	}
+
+	public static String clearAllHtmlTag(String res) {
+		res = StringUtils.trim(res);
+		res = ignoreCaseReplace(res, "(　|&nbsp;)", " "); // 取消所有的空格
+		res = ignoreCaseReplace(res, "</?.*?>", " "); // 处理其他HTML标签
+		res = res.replaceAll("\n", ""); // 替换所有的换行符
+		return res;
+	}
+
+	public static String clearDescitionAllHtmlTag(String res) {
+		res = StringUtils.trim(res);
+		// 暂时取消所有空格，在rss desciption中
+		res = ignoreCaseReplace(res, "(　|&nbsp;)", ""); // 取消所有的空格
+		// res = ignoreCaseReplace(res, "&nbsp;", ""); // 取消所有的空格
+		res = ignoreCaseReplace(res, "</?.*?>", " "); // 处理其他HTML标签
+		res = ignoreCaseReplace(res, "<.*", ""); // 处理未闭合的标签
+		res = res.replaceAll("\n", ""); // 替换所有的换行符
+		return res;
+	}
+
+	public static String formatAbstractXmlToTxt(String xml) {
+		xml = xml.replaceAll("&#246;", "o");
+		xml = xml.replaceAll("&#248;", "o");
+		xml = xml.replaceAll("&#8220;", "\"");
+		xml = xml.replaceAll("&#8221;", "\"");
+		xml = xml.replaceAll("&#[^;]*;", "");
+		return xml;
+	}
+
+	public static String ignoreCaseReplace(String source, String oldstring, String newstring) {
+		if (StringUtils.isBlank(source)) {
+			return "";
+		}
+		Pattern p = Pattern.compile(oldstring, Pattern.CASE_INSENSITIVE);
+		Matcher m = p.matcher(source);
+		String ret = m.replaceAll(newstring);
+		return ret;
+	}
+	
+	public static long getCidFromRequest(HttpServletRequest request) {
+		long cid = 0;//ParseUtil.paseLong(request.getParameter("cid"), 0);
+		if(cid <= 0) {
+			ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+			if (clientUser != null) {
+				cid = clientUser.getCid();
+			}
+		}
+		return cid;
+	}
+	
+	public static int getProductIdFromRequest(HttpServletRequest request) {
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);
+		if(productId <= 0) {
+			productId = 1;
+		}
+		return productId;
+	}
+	
+	/**
+	 * 传入普通版页面 和 低端版页面，返回适配后的页面
+	 * @param request
+	 * @param page
+	 * @param pageLow
+	 * @return
+	 */
+	public static String showPage(HttpServletRequest request, String page, String pageLow) {
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId == SysConfig.MODEL_INFO_ID){
+				return pageLow;
+			}
+		}catch (Exception e) {
+		}
+		return page;
+	}
+	
+	public static boolean isPhoneNum(String phone) {
+		if(phone == null) {
+			return false;
+		}
+		Pattern phonePattern = Pattern.compile("^1\\d{10}$");
+		if(phone!=null && phonePattern.matcher(phone).find()){
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		/*
+		 * String s=
+		 * "hi club ! &nbsp; ttestt <img src=\"http://pic.yupoo.com/jdvip/Bk7e1dnh/square.jpg\"/..."
+		 * ; String content = clearDescitionAllHtmlTag(s);
+		 * System.out.println("content==="+content);
+		 */
+
+		String s111 = getTestSCookieHeader("6bc9ac2fbdda9ecc5892e27ce790be032f6d9e8ad421b86ac8da9680c9379fc2c8df45a5688cede0d29a3d87cde32f3cd158dc184da06dd92539d43ef9c872e6576a7d5de2b729b373299f97458cd520f81227f876b86bb82c7839ee842beea3125d22c72746d5339f59ef15246d4dedd6f2dd50341b6563fd2bbc3ea2b31622ef7d0e884ab9a7d9cba77f47d3705cf5");
+		System.out.println("sss=" + s111);
+		System.out.println("sss=" + ToolsAesCrypt.Decrypt(s111, "2D2AE7C87C712EB5"));
+	}
+
+}

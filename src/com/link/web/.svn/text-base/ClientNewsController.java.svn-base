@@ -1,0 +1,612 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.apache.tools.ant.util.DateUtils;
+import org.dom4j.CDATA;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+import com.wap.sohu.mobilepaper.model.ClientAdaptInf;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.NewsContent;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.service.AdaptServiceImpl;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.IHttpProxyService;
+import com.wap.sohu.mobilepaper.service.INewsCommentService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.IPublicationService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.ArticleUtil;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.Dom4jUtils;
+import com.wap.sohu.mobilepaper.util.ElementUtils;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.MyStringUtil;
+import com.wap.sohu.mobilepaper.util.NewsXmlUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientNewsController {
+
+	private static final Logger logger = Logger.getLogger(ClientNewsController.class);
+
+	@Autowired
+	protected INewsService newsService;
+
+	@Autowired
+	protected IHttpProxyService httpProxyService;
+	@Autowired
+	protected IClientService clientService;
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+	@Autowired
+	protected AdaptServiceImpl adaptService;
+	@Autowired
+	protected INewsCommentService newsCommentService;
+	@Autowired
+	protected IPublicationService publicationService;
+
+	public static MemcachedClientIF clientNewsCache = MemcachedManager.getInstance().getMemcachedClient(
+			"clientNewsCache");
+
+	public static final int NEWS_CONTENT_EXPIRE_TIME = 60 * 60 * 2;// 取到内容的缓存时间
+
+	@RequestMapping(value = "/news/list.go")
+	public String list(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int page = HttpUtil.getRequestInt(request, "page", 1);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int startId = HttpUtil.getRequestInt(request, "startId", 0);
+		int pageSize = HttpUtil.getRequestInt(request, "num", 20);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId, pubId));
+		List<NewsContent> newsList = newsService.searchNewsContent(pubIds, pageId, termId, fetchRuleId, startId, page,
+				pageSize, 0);
+		String rt = HttpUtil.getRequestString(request, "rt");
+		if (newsList == null || newsList.size() == 0) {
+			if ("json".equalsIgnoreCase(rt)) {
+				String jsonString = JSonUtil.getJSONStringFromXml(ClientUtil.getReturnXml("404", "没有新闻"));
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				RenderUtil.renderXml(response, ClientUtil.getReturnXml("404", "没有新闻"));
+			}
+		} else {
+			System.out.println("searchNewsContent==" + pubIds + "_" + startId + "_" + page + "_" + pageSize);
+
+			if ("json".equalsIgnoreCase(rt)) {
+				String jsonString = JSonUtil.getJSONStringFromXml(NewsXmlUtil.getNewsListXml(newsList));
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				String xmlString = NewsXmlUtil.getNewsListXml(newsList);
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 滚动新闻接口输出
+	 * 
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+
+	@RequestMapping(value = "/news/view.do", params = "m=rollingNews")
+	public String viewRollNews(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		rollingNews(model, request, response);
+		return "rollingnews/rollingNews";
+	}
+
+	@RequestMapping(value = "/news/rollnews.go")
+	public String rollingNews(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		int startId = HttpUtil.getRequestInt(request, "startId", 0);
+		int pageNum = HttpUtil.getRequestInt(request, "pageNum", 1);
+		int pageSize = HttpUtil.getRequestInt(request, "pageSize", 20);
+		String title = HttpUtil.getRequestString(request, "title", "更多新闻");
+		String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId, pubId));
+		if (pageNum >= 1)
+			model.addAttribute("prePage", pageNum - 1);
+		model.addAttribute("nextPage", pageNum + 1);
+		List<NewsContent> newsList = newsService.searchNewsContent(pubIds, pageId, termId, fetchRuleId, startId,
+				pageNum, pageSize, 0);
+		model.addAttribute("newsList", newsList);
+		model.addAttribute("sid", sid);
+		model.addAttribute("pubId", pubId);
+		model.addAttribute("pageId", pageId);
+		model.addAttribute("termId", termId);
+		model.addAttribute("subId", subId);
+		model.addAttribute("fetchRuleId", fetchRuleId);
+		model.addAttribute("title", title);
+		model.addAttribute("pageNum", pageNum);
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		boolean isSelfAnalysis = false;
+		if (clientUser != null && clientUser.getProtocol() >= 4) {
+			isSelfAnalysis = true;
+		}
+		model.addAttribute("isSelfAnalysis", isSelfAnalysis);
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "rollingnews/rollingNewsLow";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH) {
+				return "rollingnews/rollingNewsTouch";
+			}
+		} catch (Exception e) {
+		}
+		return "rollingnews/rollingNews";
+	}
+
+	@RequestMapping(value = "/news/article.go")
+	public String newsDetail(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		String imgSize = HttpUtil.getRequestString(request, "imgSize", "2");
+		int platformId = HttpUtil.getRequestInt(request, "platformId", 0);
+		String newsType = HttpUtil.getRequestString(request, "newsType", "news");
+		String rt = HttpUtil.getRequestString(request, "rt");
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstall = (ClientInstall) request.getAttribute("clientInstall");
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		int channelId = HttpUtil.getRequestInt(request, "channelId", 0);
+		if (platformId <= 0 && clientUser != null) {
+			platformId = clientUser.getPlatformId();
+		}
+		String cinfo = HttpUtil.getRequestString(request, "cinfo", "");
+		if ("S40".equalsIgnoreCase(cinfo)) {
+			sid = 4;
+			platformId = 1;
+		}
+		imgSize = getPicType(clientUser, sid, imgSize);
+
+		StringBuilder builder = new StringBuilder();
+		builder.append(id);
+		builder.append("_");
+		builder.append(termId);
+		builder.append("_");
+		builder.append(subId);
+		builder.append("_");
+		builder.append(imgSize);
+		builder.append("_");
+		builder.append(platformId);
+		builder.append("_");
+		builder.append(newsType);
+		builder.append("_");
+		builder.append(channelId);
+		builder.append("_");
+		builder.append(rt);
+		builder.append("_");
+		builder.append("v1");
+		String key = builder.toString();
+		String returnValue = "";
+		if (clientNewsCache != null) {
+			returnValue = (String) clientNewsCache.get(key);
+		}
+		if (StringUtils.isNotEmpty(returnValue)) {
+			logger.info("news in memcache" + "\t" + key);
+			if ("json".equalsIgnoreCase(rt)) {
+				RenderUtil.renderJson(response, returnValue);
+			} else {
+				RenderUtil.renderXml(response, returnValue);
+			}
+		} else {
+			// memcache没有命中
+			logger.info("news not in memcache" + "\t" + key);
+			NewsContent nc = newsService.getNewsContentNoCache(id);
+			String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId));
+			int expireTime = NEWS_CONTENT_EXPIRE_TIME;
+
+			// 填充新闻内容的其它信息
+			if (termId > 0) {
+				nc = publicationService.getNewsContentProductInfo(termId, nc);
+			}
+			boolean isRss = false;
+			if (subId > 0) {
+				Subscription subscription = subscriptionService.getSubscription(clientInstall.getProductId(), subId);
+				if (subscription != null && subscription.getSubType() == 2) {
+					isRss = true;
+				}
+			}
+			NewsSearchObject searchObject = new NewsSearchObject();
+			searchObject.setChannelId(channelId);
+			searchObject.setPlatformId(platformId);
+			searchObject.setRss(isRss);
+			searchObject.setTermId(termId);
+			
+			// 前后新闻
+			NewsContent[] newsContentContext = null;
+			if (channelId == 0) {
+				newsContentContext = newsService.getNewsContent(pubIds, pageId, termId, fetchRuleId, id, newsType);
+			}
+			if (isRss && newsContentContext[0] == null) {
+				expireTime = 60 * 60;
+			}
+			if ("json".equalsIgnoreCase(rt)) {
+				String jsonString = JSonUtil.getJSONStringFromXml(getNewsXml(searchObject, nc, imgSize,
+						newsContentContext));
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, jsonString);
+				RenderUtil.renderJson(response, jsonString);
+			} else {
+				String xmlString = getNewsXml(searchObject, nc, imgSize, newsContentContext);
+				if (clientNewsCache != null)
+					clientNewsCache.set(key, expireTime, xmlString);
+				RenderUtil.renderXml(response, xmlString);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 新闻明细页接口输出
+	 * 
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/news/articleHtml.go")
+	public String articleHtml(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int pageId = HttpUtil.getRequestInt(request, "pageId", 0);
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		String title = HttpUtil.getRequestString(request, "title", "更多新闻");
+		int subId = HttpUtil.getRequestInt(request, "subId", 0);
+		String newsType = HttpUtil.getRequestString(request, "newsType", "news");
+		int pageNum = HttpUtil.getRequestInt(request, "pageNum", 1);
+		int page = HttpUtil.getRequestInt(request, "page", 1);
+		int showOther = HttpUtil.getRequestInt(request, "showOther", 1);
+		int fetchRuleId = HttpUtil.getRequestInt(request, "fetchRuleId", 0);
+		NewsContent nc = newsService.getNewsContent(id);
+		String contentHtml = nc.getNews().getContent();
+		int contentSize = nc.getNews().getContent().length();
+		if (showOther == 1) {
+			contentHtml = (ArticleUtil.getNewsPageContent(nc.getNews().getContent(), 0, 1000));
+		} else if (showOther > 1 && contentSize > 1000) {
+			contentHtml = (ArticleUtil.getNewsPageContent(nc.getNews().getContent(), 1000, contentSize));
+		}
+		String pubIds = MyStringUtil.integerListToString(subscriptionService.getPubIdListBySubId(subId));
+		NewsContent[] newsContentContext = newsService
+				.getNewsContent(pubIds, pageId, termId, fetchRuleId, id, newsType);
+		model.addAttribute("sid", sid);
+		model.addAttribute("pubId", pubId);
+		model.addAttribute("newsId", id);
+		model.addAttribute("termId", termId);
+		model.addAttribute("page", page);
+		model.addAttribute("pageId", pageId);
+		model.addAttribute("pageNum", pageNum);
+		model.addAttribute("title", title);
+		model.addAttribute("newsContent", nc);
+		model.addAttribute("contentHtml", contentHtml);
+		model.addAttribute("showOther", showOther);
+		if (contentSize > 1000) {
+			model.addAttribute("morePage", 2);
+		}
+		model.addAttribute("newsContentContext", newsContentContext);
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "rollingnews/newsLow";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH) {
+				return "rollingnews/newsTouch";
+			}
+		} catch (Exception e) {
+		}
+		return "rollingnews/news";
+	}
+
+	/**
+	 * 获取新闻评论数量
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/news/count.go")
+	public String newsCount(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		int groupPicId = HttpUtil.getRequestInt(request, "gid", 0);
+		String rt = HttpUtil.getRequestString(request, "rt");
+		int commentCount = 0;
+		try {
+			String commentNewsId = newsCommentService.getCommentIdByNewsIdOrGroupPicId(id, groupPicId);
+			commentCount = newsCommentService.getCommentCount(commentNewsId);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(getNewsCountXml(commentCount));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			String xmlString = getNewsCountXml(commentCount);
+			RenderUtil.renderXml(response, xmlString);
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/news/tools.go")
+	public String showTools(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "rollingnews/toolLow";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH) {
+				return "rollingnews/toolTouch";
+			}
+		} catch (Exception e) {
+		}
+		return "rollingnews/tool";
+	}
+
+	@RequestMapping(value = "/news/updateNid.go")
+	public String clearNewsCache(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int id = HttpUtil.getRequestInt(request, "newsId", 0);
+		newsService.clearNewsContentCache(id);
+		RenderUtil.renderText(response, "ok");
+		return null;
+	}
+
+	@RequestMapping(value = "/clearNewsCache.go")
+	public String clearAllNewsCache(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		clientNewsCache.flush();
+		RenderUtil.renderText(response, "clear news cache end");
+		return null;
+	}
+
+	public String getPicType(ClientUser clientUser, int sid, String imgSize) {
+		if (clientUser != null) {
+			if ("640x960".equalsIgnoreCase(clientUser.getResolution())
+					&& StringUtils.contains(clientUser.getPlatform(), "iPhone")) {
+				return "big620";
+			}
+			ClientAdaptInf cai = clientService.getModelType(clientUser.getCid());
+			if (cai != null) {
+				sid = cai.getId();
+			}
+		}
+		if (sid > 0) {
+			ClientAdaptInf cai = adaptService.getClientAdaptInfById(sid);
+			if (cai != null && StringUtils.isNotBlank(cai.getPicType())) {
+				return cai.getPicType();
+			}
+		}
+		if (StringUtils.isNotBlank(imgSize)) {
+			if ("1".equalsIgnoreCase(imgSize)) {
+				return "small";
+			} else if ("2".equalsIgnoreCase(imgSize)) {
+				return "middle";
+			} else if ("3".equalsIgnoreCase(imgSize)) {
+				return "big";
+			} else if ("big480".equalsIgnoreCase(imgSize)) {
+				return "big480";
+			} else if ("big620".equalsIgnoreCase(imgSize)) {
+				return "big620";
+			} else if ("org".equalsIgnoreCase(imgSize)) {
+				return "org";
+			} else {
+				return "big";
+			}
+		}
+		return imgSize;
+	}
+
+	private String getNewsCountXml(int commentCount) {
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("commentNum");
+		element.setText(String.valueOf(commentCount));
+		element = rootElement.addElement("pv");
+		element.setText("0");
+		element = rootElement.addElement("digNum");
+		element.setText("0");
+		return doc.asXML();
+	}
+
+	private String getNewsXml(NewsSearchObject searchObject, NewsContent newsContent, String imgSize,
+			NewsContent[] newsContext) {
+		int termId = searchObject.getTermId();
+		int channelId = searchObject.getChannelId();
+		int platformId = searchObject.getPlatformId();
+		boolean isRss = searchObject.isRss;
+		ArticleUtil articleUtil = new ArticleUtil();
+		Document doc = DocumentHelper.createDocument();
+		if (newsContent == null) {
+			Element rootElement = doc.addElement("root");
+			Element element = rootElement.addElement("news");
+			element.setText("not found!");
+			return doc.asXML();
+		}
+		if(newsContent.getIsDelete()==1){
+			newsContent.setContent("该新闻已删除");
+			newsContent.getNews().setLongTitle("该新闻已删除");
+			newsContent.setTitle("该新闻已删除");
+			newsContent.getNews().setContent("该新闻已删除");
+			newsContent.getNews().setAbstract("该新闻已删除");
+		}
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("newsId");
+		element.setText(String.valueOf(newsContent.getId()));
+		element = rootElement.addElement("type");
+		element.setText("新闻");
+		String title = "";
+		if (StringUtils.isNotBlank(newsContent.getNews().getLongTitle())) {
+			title = (newsContent.getNews().getLongTitle());
+		} else if (StringUtils.isNotBlank(newsContent.getTitle())) {
+			title = (newsContent.getTitle());
+		}
+		if (channelId > 0) {
+			String channelTitle = newsService.getChannelNewsTitle(channelId, newsContent.getId());
+			if (StringUtils.isNotBlank(channelTitle)) {
+				title = channelTitle;
+			}
+		}
+		Dom4jUtils.addCDATAElement(rootElement, "title", title);
+		if (StringUtils.isNotBlank(newsContent.getNews().getNtime())) {
+			Dom4jUtils.addElement(rootElement, "time", newsContent.getNews().getNtime());
+		} else if (newsContent.getUpdateTime() != null) {
+			Dom4jUtils.addElement(rootElement, "time",
+					DateUtils.format(newsContent.getUpdateTime(), "yyyy-MM-dd HH:mm:ss"));
+		}
+
+		Dom4jUtils.addElement(rootElement, "from", newsContent.getNews().getMedia());
+
+		element = rootElement.addElement("commentNum");
+		if (newsContent.getNid() > 0) {
+			// 获取评论数量
+			element.setText(String.valueOf(newsCommentService.getCommentCount(String.valueOf(newsContent.getNid()))));
+		} else {
+			element.setText("-1");
+		}
+		element = rootElement.addElement("digNum");
+		element.setText("0");
+		
+		// TODO: 各取值代表什么意思?
+		if (platformId == 1 || platformId == 2 || platformId == 6 || platformId == 5) {
+			if (newsContent.getNews() != null && newsContent.getNews().getContentPic() != null
+					&& newsContent.getNews().getContentPic().size() > 0) {
+				Element imageElement = rootElement.addElement("images");
+				// TODO: 判断逻辑是怎么样的?
+				for (Image image : newsContent.getNews().getContentPic()) {
+					if (NumberUtils.toInt(image.getSize(), 10000) > 1000
+							|| NumberUtils.toInt(image.getWeight(), 22) >= 22) {
+						ElementUtils.addElement(imageElement, "image",
+								// TODO: 为什么没用静态方法?
+								articleUtil.getImageUrlBySize(image.getUrl(), imgSize));
+					}
+				}
+			}
+		}
+		element = rootElement.addElement("content");
+		CDATA data = DocumentHelper.createCDATA(articleUtil.getNewsContent(newsContent.getNews(), imgSize, platformId,
+				isRss));
+		element.add(data);
+
+		element = rootElement.addElement("shareContent");
+		StringBuilder builder = new StringBuilder();
+		builder.append(title);
+		if (newsContent.getNews().getAbstract() != null && newsContent.getNews().getAbstract().trim().length() > 0) {
+			builder.append(" ");
+			String abstractTemp = ClientUtil.clearAllHtmlTag(StringEscapeUtils.unescapeHtml(newsContent.getNews()
+					.getAbstract().trim()));
+			if (abstractTemp.length() < 70) {
+				builder.append(abstractTemp);
+			} else {
+				builder.append(abstractTemp.substring(0, 69)).append("……");
+			}
+		}
+		if (termId == 7878 || termId == 7879) {
+			builder.append(" http://t.itc.cn/NfAFR"); // http://k.sohu.com/event/05/indexcom.html
+		} else {
+			builder.append(" http://3g.k.sohu.com/t/n");
+			builder.append(newsContent.getId());
+			if (newsContent.getProductId() == 1) {
+				builder.append(" @搜狐新闻客户端");
+			}
+		}
+
+		/*
+		 * if (StringUtils.isNotBlank(newsContent.getProductName())) {
+		 * builder.append(newsContent.getProductName()); } else {
+		 * builder.append("搜狐新闻"); } builder.append("客户端下载：");
+		 * builder.append(clientDownloadUrl);
+		 */
+		data = DocumentHelper.createCDATA(builder.toString());
+		element.add(data);
+
+		element = rootElement.addElement("link");
+		element.setText("http://3g.k.sohu.com/t/n" + newsContent.getId());
+
+		if (newsContext != null && newsContext.length == 2 && newsContext[1] != null) {
+			NewsContent tn = newsContext[1];
+			Dom4jUtils.addElement(rootElement, "nextName", tn.getTitle());
+			Dom4jUtils.addElement(rootElement, "nextId", String.valueOf(tn.getId()));
+		}
+		if (newsContext != null && newsContext.length == 2 && newsContext[0] != null) {
+			NewsContent tn = newsContext[0];
+			Dom4jUtils.addElement(rootElement, "preName", tn.getTitle());
+			Dom4jUtils.addElement(rootElement, "preId", String.valueOf(tn.getId()));
+		}
+		return doc.asXML();
+	}
+
+	class NewsSearchObject {
+		private int termId;
+		private int platformId;
+		private boolean isRss;
+		private int channelId;
+
+		public int getTermId() {
+			return termId;
+		}
+
+		public void setTermId(int termId) {
+			this.termId = termId;
+		}
+
+		public int getPlatformId() {
+			return platformId;
+		}
+
+		public void setPlatformId(int platformId) {
+			this.platformId = platformId;
+		}
+
+		public boolean isRss() {
+			return isRss;
+		}
+
+		public void setRss(boolean isRss) {
+			this.isRss = isRss;
+		}
+
+		public int getChannelId() {
+			return channelId;
+		}
+
+		public void setChannelId(int channelId) {
+			this.channelId = channelId;
+		}
+	}
+}

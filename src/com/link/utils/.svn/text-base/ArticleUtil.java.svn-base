@@ -1,0 +1,349 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+
+import com.wap.sohu.mobilepaper.model.xml.Image;
+import com.wap.sohu.mobilepaper.model.xml.News;
+
+public class ArticleUtil {
+
+	// private final String IMAGE_URL_PRE = "http://pic.k.sohu.com/img8/wb/";
+
+	// private final String ADAPT_IMAGE_URL_PRE =
+	// "http://pic.k.sohu.com/img7/adapt/wb/";
+
+	private final String IMAGE_URL_PRE = "http://cache.k.sohu.com/img8/wb/";
+
+	private final String ADAPT_IMAGE_URL_PRE = "http://cache.k.sohu.com/img7/adapt/wb/";
+
+	public String getNewsContent(News news, String imgSize, int platformId, boolean isRss) {
+		StringBuffer buffer = new StringBuffer();
+		String newsContent = news.getContent();
+		if (platformId == 1 || platformId == 2 || platformId == 6) {
+			newsContent = StringEscapeUtils.unescapeHtml(newsContent);
+			news.setContent(newsContent);
+		}
+		// 过滤新闻编辑器中带的center标签
+		if (StringUtils.isBlank(newsContent) && StringUtils.isNotBlank(news.getAbstract())) {
+			newsContent = news.getAbstract();
+			news.setContent(news.getAbstract());
+		}
+		newsContent = newsContent.replaceAll("</?center.*?>", "");
+		if (!checkHtmlContainImage(newsContent)) {
+			if (news.getContentPic() != null && news.getContentPic().size() > 0) {
+				for (Image image : news.getContentPic()) {
+					buffer.append(getImageApiValue(image, imgSize, platformId, isRss));
+				}
+			}
+		} else {
+			if (news.getContentPic() != null && news.getContentPic().size() > 0) {
+				for (Image image : news.getContentPic()) {
+					int cIndex = StringUtils.indexOf(news.getContent(), image.getUrl());
+					if (cIndex > -1) {
+						int endIndex = news.getContent().indexOf(">", cIndex);
+						String temp = StringUtils.substring(news.getContent(), 0, endIndex + 1);
+						int beginIndex = StringUtils.lastIndexOf(temp, "<");
+						temp = StringUtils.substring(news.getContent(), beginIndex, endIndex + 1);
+						newsContent = newsContent.replace(temp, getImageApiValue(image, imgSize, platformId, isRss));
+					}
+				}
+				news.setContent(newsContent);
+			}
+		}
+		buffer.append(formatNewsContent(news.getContent(), 0));
+		if (isRss && StringUtils.isNotBlank(news.getReferUrl())) {
+			buffer.append("<p>　　　　<a href='" + news.getReferUrl() + "#'>查看原文</a></p>");
+		}
+		return buffer.toString();
+	}
+
+	public boolean checkHtmlContainImage(String content) {
+		if (StringUtils.contains(content, "type=image") || StringUtils.contains(content, "<img")
+				|| StringUtils.contains(content, "type=\"image\"")) {
+			return true;
+		}
+		return false;
+	}
+
+	public String getImageApiValue(Image image, String imgSize, int platformId, boolean isRss) {
+		if (platformId == 1 || platformId == 2 || platformId == 6) {
+			return "";
+		}
+		StringBuffer buffer = new StringBuffer();
+		String imageTitle = (image.getAlt() == null) ? "" : image.getAlt();
+		imageTitle = imageTitle.replace("'", "");
+		imageTitle = imageTitle.replace("\"", "");
+		boolean checkSize = true;
+		if (NumberUtils.toInt(image.getSize(), 10000) < 5000 || NumberUtils.toInt(image.getHeight(), 200) < 80) {
+			checkSize = false;
+		}
+		if (isRss) {
+			if (checkSize) {
+				buffer.append("<div ><center>");
+			}
+			String imageUrl = getRssImageUrlBySize(image.getUrl(), imgSize);
+			buffer.append("<img src=\"" + imageUrl + "\"");
+			buffer.append(" style=\"max-width:94%\" ");
+			buffer.append(" title=\"" + imageTitle + "\"  />");
+			if (checkSize) {
+				buffer.append("</center></div>");
+			}
+		} else {
+			if (NumberUtils.toInt(image.getSize(), 10000) < 1000 || NumberUtils.toInt(image.getWeight(), 200) <= 22) {
+				String imageUrl = getImageUrlBySize(image.getUrl(), imgSize);
+				buffer.append(" <img src=\"" + imageUrl + "\"");
+				buffer.append("  title=\"" + imageTitle + "\"  ");
+				buffer.append(" />");
+				return buffer.toString();
+			}
+			String imageUrl = getImageUrlBySize(image.getUrl(), imgSize);
+			buffer.append("  <div class=\"photoContainer\"> ");
+			// buffer.append(" <!--下面这个<a>是防止图片overflow的容器，并且让它有被点击高亮的效果，而且onclick必须写在<a>里。--> ");
+			buffer.append("  <a class=\"photo\"   ");
+			if (checkSize) {
+				buffer.append("  onclick=\"magnifyImage('" + (imageUrl) + "','" + StringUtils.trimToEmpty(imageTitle)
+						+ "')\" > ");
+			}
+			// buffer.append(" <!-- 图片不分缩略和原图, 缩略图使用的也是原图。为了不用服务器去算图片大小， adjustImgSize函数必须写，否则无法自动调整尺寸以达到最好缩略效果 --> ");
+			buffer.append(" <img src=\"" + getMaginfyImageUrl(imageUrl) + "\"");
+			buffer.append("	onload=\"adjustImgSize(this)\" ");
+			if (StringUtils.isNotBlank(image.getAlt())) {
+				buffer.append("  title=\"" + imageTitle + "\"  ");
+			}
+			buffer.append(" /></a>");
+			if (checkSize) {
+				buffer.append(" <span class=\"magnify\"/> ");
+			}
+			// buffer.append(" 	<!--那个表示可以放大的左下角的图标--> ");
+			buffer.append(" </div>");
+		}
+		return buffer.toString();
+	}
+
+	public static String formatNewsContent(String content, int start) {
+		// System.out.println(content);
+		if (content == null || content.length() == 0) {
+			return content;
+		}
+		content = content.trim();
+		content = content.replace("&#65279;", "");
+		content = content.replaceAll("(　|&nbsp;)", ""); // 取消中文空格和字符
+		String divS = "<p>";
+		String divE = "</p>";
+		content = StringUtils.trim(content);
+		content = content.replaceAll("\\n[\\s|　]*", divE + divS);
+		// 把所有的回车+空白字符换成</p><div class="prog">
+		// content = content.replaceAll("[\\s|　|&nbsp;]*", "");
+		// 如果是第一页，保证以<p>开始
+		if (start == 0 && !content.startsWith(divS) && !content.startsWith("<div class=\"photoContainer\"")) {
+			content = divS + content;
+		}
+		// 保证以</p>结尾：如果不是以</p>结尾，且最后一个<p>在最后个</p>之后，补上一个</p>
+		if (!content.endsWith(divE) && content.lastIndexOf(divS) > content.lastIndexOf(divE)) {
+			content = content + divE;
+		}
+		// 保证不以</p>开始：如果以</p>开通，去掉开头的</p>
+		if (content.startsWith(divE)) {
+			content = content.substring(divE.length());
+		}
+		// 如果</p>出现在了<p>之前，去掉第一个</p>
+		if (content.indexOf(divE) < content.indexOf(divS)) {
+			content = content.replaceFirst(divE, "");
+		}
+		content = content.replaceAll("(<br />|<br>|<br/>)", "</p><p>");
+		content = content.replace("<p></p>", "");
+		content = content.replaceAll("<p>[\\s|　]*</p>", "");
+		content = content.replaceAll("<p>[\\s|　]*<p>", "<p>");
+		content = content.replaceAll("<p>[\\s|　]*", "<p>");
+		content = content.replace("<p><div class=\"photoContainer\">", "<div class=\"photoContainer\">");
+		content = content.replace("</div></p>", "</div>");
+		content = content.replace("<p>", "<p>　　");
+		content = content.replace("<p>　　<div>", "<p>");
+		content = content.replace("</div></p>", "");
+		return content;
+	}
+
+	public static void main(String[] args) {
+		String s = "&amp;一辆汽车&gt;飞速驶来,当即将撞到女孩的时候&amp;#8230;女孩突然腾空而起,在空中转体720度并从腰间拔出两把手枪,对准汽车不停射击,汽车随即爆炸.&lt;br/&gt;　　&amp;#8212;&amp;#8212;&amp;#8212;&amp;#8212;&amp;#8212;美国大片&lt;br/&gt;";
+		// s =
+		// "一辆汽车飞速驶来,当即将撞到女孩的时候&#8230;女孩突然腾空而起,在空中转体720度并从腰间拔出两把手枪,对准汽车不停射击,汽车随即爆炸.<br/>　　n&#8212;&#8212;&#8212;&#8212;&#8212;美国大片<br/>";
+		String s2 = StringEscapeUtils.unescapeHtml(s);
+		System.out.println("s2====" + s2);
+		String s1 = formatNewsContent(s, 0);
+		System.out.println("s11====" + s1);
+
+	}
+
+	public String getSquareImageUrlBySize(String url, int imgSize) {
+		String fileSufix = getImageSufix(url);
+		String du = url.replaceAll("." + fileSufix, "_" + imgSize + "_" + imgSize + "." + fileSufix);
+		return ADAPT_IMAGE_URL_PRE + du;
+	}
+	public String getAnyImageUrlBySize(String url, int imgSize,int height) {
+		String fileSufix = getImageSufix(url);
+		String du = url.replaceAll("." + fileSufix, "_" + imgSize + "_" + height + "." + fileSufix);
+		return ADAPT_IMAGE_URL_PRE + du;
+	}
+
+	public String getSquareImageUrlBySize(String url, String imgSize) {
+		String fileSufix = getImageSufix(url);
+		if ("1".equalsIgnoreCase(imgSize) || "small".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_124_124." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("3".equalsIgnoreCase(imgSize) || "big".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_302_302." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("4".equalsIgnoreCase(imgSize) || "big480".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_460_460." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("big620".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_620_620." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("10".equalsIgnoreCase(imgSize) || "org".equalsIgnoreCase(imgSize)) {
+			return IMAGE_URL_PRE + url;
+		} else {
+			String du = url.replaceAll("." + fileSufix, "_172_172." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		}
+	}
+
+	public String getRssImageUrlBySize(String url, String imgSize) {
+		String fileSufix = getImageSufix(url);
+		if ("1".equalsIgnoreCase(imgSize) || "small".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_124_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("3".equalsIgnoreCase(imgSize) || "big".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_318_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("4".equalsIgnoreCase(imgSize) || "big480".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_478_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("big620".equalsIgnoreCase(imgSize) || "iphone4".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_638_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("10".equalsIgnoreCase(imgSize) || "org".equalsIgnoreCase(imgSize)) {
+			return IMAGE_URL_PRE + url;
+		} else {
+			String du = url.replaceAll("." + fileSufix, "_178_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		}
+	}
+
+	public String getImageUrlBySize(String url, String imgSize) {
+		String fileSufix = getImageSufix(url);
+		if ("1".equalsIgnoreCase(imgSize) || "small".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_124_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("3".equalsIgnoreCase(imgSize) || "big".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_302_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("4".equalsIgnoreCase(imgSize) || "big480".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_460_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("big620".equalsIgnoreCase(imgSize) || "iphone4".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_620_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("10".equalsIgnoreCase(imgSize) || "org".equalsIgnoreCase(imgSize)) {
+			return IMAGE_URL_PRE + url;
+		} else {
+			String du = url.replaceAll("." + fileSufix, "_172_1000." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		}
+	}
+
+	public String getPicTermUrlBySize(String url, String imgSize, double imgHeight) {
+		String fileSufix = getImageSufix(url);
+		int height = (int) (150 * imgHeight);
+		if ("3".equalsIgnoreCase(imgSize) || "big".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_150_" + height + "." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("4".equalsIgnoreCase(imgSize) || "big480".equalsIgnoreCase(imgSize)) {
+			String du = url.replaceAll("." + fileSufix, "_150_" + height + "." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else if ("big620".equalsIgnoreCase(imgSize) || "iphone4".equalsIgnoreCase(imgSize)) {
+			height = (int) (300 * imgHeight);
+			String du = url.replaceAll("." + fileSufix, "_300_" + height + "." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		} else {
+			String du = url.replaceAll("." + fileSufix, "_150_" + height + "." + fileSufix);
+			return ADAPT_IMAGE_URL_PRE + du;
+		}
+	}
+
+	public String getMaginfyImageUrl(String url) {
+		if (url.contains("_620_")) {
+			return url.replaceAll("_620_1000", "_180_180");
+		} else if (url.contains("_172_")) {
+			return url.replaceAll("_172_1000", "_90_90");
+		} else if (url.contains("_124_")) {
+			return url.replaceAll("_124_1000", "");
+		} else if (url.contains("_302_")) {
+			return url.replaceAll("_302_1000", "_120_120");
+		} else if (url.contains("_318_")) {
+			return url.replaceAll("_318_1000", "_120_120");
+		} else if (url.contains("_460_")) {
+			return url.replaceAll("_460_1000", "_120_120");
+		} else if (url.contains("_478_")) {
+			return url.replaceAll("_478_1000", "_120_120");
+		}
+		return url;
+	}
+
+	public static String getImageSufix(String url) {
+		url = StringUtils.substringAfterLast(url, "/");
+		int dotIndex = url.lastIndexOf(".");
+		String sufix = "";
+		if (dotIndex > -1) {
+			sufix = url.substring(dotIndex + 1);
+		}
+		if (StringUtils.isBlank(sufix)) {
+			sufix = "jpg";
+		}
+		return sufix;
+	}
+
+	/**
+	 * 
+	 * @param news
+	 * @param start
+	 * @param pagesize
+	 */
+	public static String getNewsPageContent(String newsContent, int start, int pageSize) {
+		if (StringUtils.isBlank(newsContent)) {
+			return "";
+		}
+		try {
+			int end = start + pageSize;
+			if (end >= newsContent.length() - 1) {
+				end = newsContent.length() - 1;
+			}
+			String s = newsContent.substring(start, end);
+			return formatNewsContent(s, 0);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return newsContent;
+	}
+
+	public static String formatAbstractXmlToTxt(String xml) {
+		xml = xml.replaceAll("&#246;", "o");
+		xml = xml.replaceAll("&#248;", "o");
+		xml = xml.replaceAll("&#8220;", "\"");
+		xml = xml.replaceAll("&#8221;", "\"");
+		xml = xml.replaceAll("&#[^;]*;", "");
+		return xml;
+	}
+
+	public String getFocalImageUrl(String url) {
+		if (url.startsWith("http://")) {
+			return url;
+		}
+		return IMAGE_URL_PRE + url;
+
+	}
+}

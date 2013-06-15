@@ -1,0 +1,72 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.UpgradeUtil;
+
+/**
+ * 升级接口.
+ * @author tj
+ *
+ */
+public class ClientUpgradeServlet extends BaseServlet {
+
+	private static final long serialVersionUID = 7884198855185047941L;
+	
+	@Override
+	public void doPost(HttpServletRequest request, HttpServletResponse response){
+		doGet(request,response);
+	}
+	@Override
+	public void doGet(HttpServletRequest request, HttpServletResponse response) {
+		setCommon(request, response);
+		ClientUser clientUser = getClientUser(request, response);
+		PrintWriter out = null;
+		try {
+			out = response.getWriter();
+			 
+			String test = HttpUtil.getRequestString(request, "test", "false");
+			String platform = HttpUtil.getRequestString(request, "platform", "");
+			if(test.equals("true")){
+				String s ="<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+				if(platform.equals("s60v5")){
+					s+="<update><status>200</status><upgrade>101</upgrade><upgradetype>200</upgradetype><version>1.27</version><content>尊敬的用户，搜狐新闻新版本将更加节约您的流量，请确认更新。</content><size>119940</size><upgradeurl>http://221.179.173.138/mp/upgrade/SohuNews_S60V5_1.27.sisx</upgradeurl></update>";
+				}
+				if(platform.equals("s60v3")){
+					s+="<update><status>200</status><upgrade>101</upgrade><upgradetype>200</upgradetype><version>1.27</version><content>尊敬的用户，搜狐新闻新版本将更加节约您的流量，请确认更新。</content><size>119940</size><upgradeurl>http://221.179.173.138/mp/upgrade/SohuNews_S60V3_1.27.sisx</upgradeurl></update>";
+				}
+				if(platform.equals("android")){
+					s+="<update><status>200</status><upgrade>101</upgrade><upgradetype>200</upgradetype><version>1.27</version><content>尊敬的用户，搜狐新闻新版本将更加节约您的流量，请确认更新。</content><size>119940</size><upgradeurl>http://221.179.173.138/mp/upgrade/Android_SohuNewsClient.apk</upgradeurl></update>";
+				}
+				if(platform.equals("ppc")){
+					s+="<update><status>200</status><upgrade>101</upgrade><upgradetype>200</upgradetype><version>1.27</version><content>尊敬的用户，搜狐新闻新版本将更加节约您的流量，请确认更新。</content><size>119940</size><upgradeurl>http://221.179.173.138/mp/upgrade/WM_SohuNews_V1.06.CAB</upgradeurl></update>";
+				}
+				
+				byte[] data = s.getBytes("utf-8");
+				response.setStatus(200);
+				response.setContentLength(data.length);
+				out.print(s);
+				return;
+			}
+			
+			ClientInstall clientInstallSend = (ClientInstall)request.getAttribute("clientInstall");
+			String updateMessage = UpgradeUtil.checkUpgrade(clientUser, true, clientInstallSend);
+			byte[] data = updateMessage.getBytes("utf-8");
+			response.setStatus(200);
+			response.setContentLength(data.length);
+			out.print(updateMessage);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return;
+	}
+
+}

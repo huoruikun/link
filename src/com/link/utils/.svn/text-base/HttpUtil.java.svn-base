@@ -1,0 +1,695 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLEncoder;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import net.spy.memcached.MemcachedClientIF;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import com.wap.sohu.mobilepaper.memcached.MemcachedManager;
+
+public class HttpUtil {
+	private static Log log = LogFactory.getLog(HttpUtil.class);
+	
+	public static MemcachedClientIF clientUserCache = MemcachedManager.getInstance().getMemcachedClient("clientUserCache");
+	
+	 /**
+
+     * @param url
+     * @param charset
+     * @param poststrings  a=a&b=b类型
+     * @return
+     */
+    public static String getUrlContent(String url, String charset,String[] poststrings) {
+        //URL url1 = new URL(url);//internal site
+        //InputStream inr = null;
+        HttpURLConnection huc=null;
+        try {
+            URLConnection UrlConnObj1 = new URL(url).openConnection();
+            huc = (HttpURLConnection) UrlConnObj1;
+            huc.setRequestMethod("POST");
+            huc.setDoOutput(true);
+            huc.setDoInput(true);
+            huc.setUseCaches(false);
+            huc.setDefaultUseCaches(false);
+            // 提交评论的接口需要检查 Referer. add by jianbozhu 2012年3月7日20时22分09秒
+            huc.setRequestProperty("Referer", "http://www.sohu.com");
+            BufferedOutputStream out = new BufferedOutputStream(huc.getOutputStream());
+            for (int i = 0; i < poststrings.length; i++) {
+                out.write(poststrings[i].getBytes(charset));
+                if (i<poststrings.length-1)
+                	out.write('&');
+            }
+            out.flush();
+            out.close();
+            
+            InputStream inr = huc.getInputStream();
+            char[] buf = new char[1000];
+            int length = -1;
+            //String result="";
+            StringBuffer res = new StringBuffer();
+            InputStreamReader reader = new InputStreamReader(inr, charset);
+            while ((length = reader.read(buf)) != -1) {
+                res.append(buf, 0, length);
+            }
+            reader.close();
+            //inr.close();
+            return res.toString();
+            
+        } catch (Exception e) {
+        	System.out.println(url);
+            e.printStackTrace();
+            return null;
+        }
+        finally{
+            if (huc!=null) huc.disconnect();
+        }
+        
+    }
+    
+
+    
+    
+	/**
+     * @param url
+     * @param charset
+     * @param poststrings
+     * @return
+     */
+	 public static String postBinaryToUrl(String url, String charset,byte[] binary) {
+		 String result = null;
+		 int i=0;
+		 while(i<5){
+			 result = _postBinaryToUrl(url,charset,binary);
+			 if(result!=null){
+				 break;
+			 }
+			 i++;
+		 }
+		 if(result == null){
+			 log.error("postBinaryToUrl retry faild! url="+url);
+		 }
+		 return result;
+	 }
+    private static String _postBinaryToUrl(String url, String charset,byte[] binary) {
+        //URL url1 = new URL(url);//internal site
+        //InputStream inr = null;
+        HttpURLConnection huc=null;
+        try {
+            URLConnection UrlConnObj1 = new URL(url).openConnection();
+            huc = (HttpURLConnection) UrlConnObj1;
+            huc.setReadTimeout(10000);
+            huc.setConnectTimeout(5000);
+            huc.setRequestMethod("POST");
+            huc.setRequestProperty("content-type","binarry/data");
+            huc.setDoOutput(true);
+            huc.setDoInput(true);
+            huc.setUseCaches(false);
+            huc.setDefaultUseCaches(false);
+            BufferedOutputStream out = new BufferedOutputStream(huc.getOutputStream());
+            out.write(binary);
+            out.flush();
+            out.close();
+
+            InputStream inr = huc.getInputStream();
+            char[] buf = new char[1000];
+            int length = -1;
+            //String result="";
+            StringBuffer res = new StringBuffer();
+            InputStreamReader reader = new InputStreamReader(inr, charset);
+            while ((length = reader.read(buf)) != -1) {
+                res.append(buf, 0, length);
+            }
+            reader.close();
+            //inr.close();
+            return res.toString();
+
+        } catch (Exception e) {
+        	log.error(e);
+            return null;
+        }
+        finally{
+            if (huc!=null) huc.disconnect();
+        }
+
+    }
+    public  static String get(String reqUrl,Map<String,String> header,String encode) {
+		HttpURLConnection url_con = null;
+		String content= "";
+		try {
+			url_con = (HttpURLConnection) new URL(reqUrl).openConnection();
+			if(header!=null){
+				for (Entry<String, String> entry : header.entrySet()) {
+					String key = entry.getKey();
+					String value = entry.getValue();
+					url_con.setRequestProperty(key, value);
+				}
+			}
+
+			StringBuffer params = new StringBuffer();
+			int paramIndex = reqUrl.indexOf("?");
+
+			if (paramIndex > 0) {
+				String parameters = reqUrl.substring(paramIndex + 1, reqUrl
+						.length());
+				String[] paramArray = parameters.split("&");
+				for (int i = 0; i < paramArray.length; i++) {
+					String string = paramArray[i];
+					int index = string.indexOf("=");
+					if (index > 0) {
+						String parameter = string.substring(0, index);
+						String value = string.substring(index + 1, string
+								.length());
+						params.append(parameter);
+						params.append("=");
+						params.append(URLEncoder.encode(value, "utf-8"));
+						params.append("&");
+					}
+				}
+				params = params.deleteCharAt(params.length() - 1);
+			}
+
+			url_con.setRequestMethod("GET");
+			url_con.setConnectTimeout(5000);
+			url_con.setReadTimeout(5000);
+			url_con.setDoOutput(true);
+			byte[] b = params.toString().getBytes();
+			url_con.getOutputStream().write(b, 0, b.length);
+			url_con.getOutputStream().flush();
+			url_con.getOutputStream().close();
+			InputStream in = url_con.getInputStream();
+			BufferedReader rd = new BufferedReader(new InputStreamReader(in,
+					encode));
+			String tempLine = rd.readLine();
+			StringBuffer temp = new StringBuffer();
+			String crlf = System.getProperty("line.separator");
+			while (tempLine != null) {
+				temp.append(tempLine);
+				temp.append(crlf);
+				tempLine = rd.readLine();
+			}
+			content = temp.toString();
+
+			rd.close();
+			in.close();
+		} catch (IOException e) {
+			log.error("[network error]"+reqUrl);
+		} finally {
+			if (url_con != null) {
+				url_con.disconnect();
+			}
+		}
+		return content;
+	}
+    
+	public static String post(String url,Map<String,String> parameters,Map<String,String> header,String... contentType) {
+        HttpURLConnection url_con=null;
+        String content = "";
+        try {
+        	StringBuffer params = new StringBuffer();
+			for (Entry<String,String> element:parameters.entrySet()) {
+//				params.append(element.getKey());
+//				params.append("=");
+				params.append(element.getValue());
+//				params.append("&");
+			}
+
+//			if (params.length() > 0) {
+//				params = params.deleteCharAt(params.length() - 1);
+//			}
+        	
+            URLConnection UrlConnObj1 = new URL(url).openConnection();
+            url_con = (HttpURLConnection) UrlConnObj1;
+            url_con.setRequestMethod("POST");
+            if(StringUtils.isNotEmpty(contentType[0]))
+            	url_con.setRequestProperty("content-type",contentType[0]);
+            
+            if(header !=null)
+            	for(Entry<String,String> entry:header.entrySet()){
+            		url_con.setRequestProperty(entry.getKey(),entry.getValue());
+            	}
+            url_con.setConnectTimeout(5000);
+			url_con.setReadTimeout(5000);
+			url_con.setDoOutput(true);
+			byte[] b = params.toString().getBytes();
+			url_con.getOutputStream().write(b, 0, b.length);
+			url_con.getOutputStream().flush();
+			url_con.getOutputStream().close();
+			InputStream in = url_con.getInputStream();
+			BufferedReader rd = new BufferedReader(new InputStreamReader(in,"UTF-8"));
+			String tempLine = rd.readLine();
+			StringBuffer temp = new StringBuffer();
+			String crlf = System.getProperty("line.separator");
+			while (tempLine != null) {
+				temp.append(tempLine);
+				temp.append(crlf);
+				tempLine = rd.readLine();
+			}
+			content = temp.toString();
+			rd.close();
+			in.close();
+        } catch (Exception e) {
+        	e.printStackTrace();
+        	log.error(e);
+            return null;
+        }
+        finally{
+            if (url_con!=null) url_con.disconnect();
+        }
+        return content;
+    }
+    
+    
+    public static  boolean openUrl(String url){
+		boolean flag = false;
+		if(httpRequest(url,false)){
+			flag = true;
+		}else{
+			for(int i=0;i<3;i++){// try 3 times
+				if(httpRequest(url,true)){
+					flag = true;
+					break;
+				}
+			}
+		} 
+		return flag;
+	}
+    
+    public static  int openhttpRequestLength(String url){
+		int length = httpRequestLength(url,false);
+		
+		
+		if(length>0){
+			return length;
+		}else{
+			for(int i=0;i<3;i++){// try 3 times
+				length = httpRequestLength(url,false);
+				
+				if(length>0){
+					return length;
+				}
+			}
+		} 
+		return 0;
+	}
+    
+   
+    
+    
+    
+    
+    /**
+     * HttpUtil.openUrl(url)的cache版
+     * */
+    public static boolean openUrlCache(String url){
+		String key = "openUrl"+url;
+		
+		Integer res = null;
+		if(clientUserCache !=null){
+			res = (Integer)clientUserCache.get(key); // res 1 是检测正常,其他情况是不正常
+		}
+		if (res!=null && res == 1) {
+			return true;
+		}
+		if(HttpUtil.openUrl(url)==true){ // 检测成功才缓存
+			
+			clientUserCache.set(key,60*60*24,1);
+			return true;
+		}else{
+			return false;
+		}
+	}
+    
+    
+    
+    private static boolean httpRequest(String url,boolean isRetry){
+    	int httpCode = 0;
+    	HttpURLConnection conn =null;
+    	try {
+    		conn = (java.net.HttpURLConnection) (new java.net.URL(url)).openConnection();
+			conn.setRequestMethod("HEAD");
+            conn.setReadTimeout(1500);
+            conn.setConnectTimeout(1000);
+            
+            httpCode =  conn.getResponseCode();
+           
+		} catch (Exception e) {
+			if(!isRetry)
+				System.out.println(DateUtil.getDate("")+" openUrl error url============="+url+"\t error message="+e.getMessage());
+		}finally {
+			if(conn !=null)
+				 conn.disconnect();
+		}
+		if(httpCode ==200)
+			return true;
+		else{
+			if(!isRetry)
+				System.out.println(DateUtil.getDate("")+" openUrl is not 200 status url============"+url+"\t http code="+httpCode);
+			return false;
+		}
+    }
+    
+    
+    private static int httpRequestLength(String url,boolean isRetry){
+    	int httpCode = 0;
+    	HttpURLConnection conn =null;
+    	try {
+    		conn = (java.net.HttpURLConnection) (new java.net.URL(url)).openConnection();
+			conn.setRequestMethod("GET");
+            conn.setReadTimeout(1500);
+            conn.setConnectTimeout(1000);
+            
+            
+            
+            return conn.getContentLength();
+           
+		} catch (Exception e) {
+			if(!isRetry)
+				System.out.println(DateUtil.getDate("")+" openUrl error url============="+url+"\t error message="+e.getMessage());
+		}finally {
+			if(conn !=null)
+				 conn.disconnect();
+		}
+		
+		
+		if(httpCode !=200){
+			if(!isRetry)
+				System.out.println(DateUtil.getDate("")+" openUrl is not 200 status url============"+url+"\t http code="+httpCode);
+			return 0;
+		}
+		return 0;
+    }
+    
+    public static String getUrlContent(String url) {
+    	String re = null;
+    	for(int retry=0;retry<3;retry++){
+    		re = getUrlContent(url, "UTF-8");
+    		if(re!=null){
+    			break;
+    		}
+    	}
+    	if(re==null){
+    		log.error("getUrlContent failed! url="+url);
+    		
+    	}
+        return re;
+    }
+    public static String getUrlContent(String newurl, String charset) {
+    	return getUrlContent(newurl, charset, 5000, 1000);
+    }
+    public static String getUrlContent(String newurl, String charset,int readTimeOut,int connectionTimeOut) {
+        java.io.InputStream inr = null;
+        java.net.HttpURLConnection conn = null;
+        try {
+            conn = (java.net.HttpURLConnection) (new java.net.URL(newurl)).openConnection();
+            conn.setReadTimeout(readTimeOut);
+            conn.setConnectTimeout(connectionTimeOut);
+            inr = conn.getInputStream();
+            char[] buf = new char[300];
+            int length = -1;
+            //String result="";
+            StringBuffer res = new StringBuffer(3000);
+            InputStreamReader reader = new InputStreamReader(inr, charset);
+            while ((length = reader.read(buf)) != -1) {
+                res.append(buf, 0, length);
+            }
+            reader.close();
+            return res.toString();
+        } catch (Exception e) {
+            //log.error(newurl+"\t"+e.getMessage()); 
+            return null;
+        } finally {
+            try {
+                if (inr != null)
+                    inr.close();
+                if (conn != null)
+                    conn.disconnect();
+            } catch (IOException e) {
+            }
+        }
+    }
+    
+    /**
+     * rs[0]content, rs[1]code
+     * @param newurl
+     * @param charset
+     * @return
+     */
+    public static String[] getUrlContentAndCode(String newurl, String charset) {
+        java.io.InputStream inr = null;
+        java.net.HttpURLConnection conn = null;
+        int httpCode = 0;
+        try {
+            conn = (java.net.HttpURLConnection) (new java.net.URL(newurl)).openConnection();
+            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(5000);
+            inr = conn.getInputStream();
+            httpCode =  conn.getResponseCode();
+            char[] buf = new char[300];
+            int length = -1;
+            //String result="";
+            StringBuffer res = new StringBuffer(3000);
+            InputStreamReader reader = new InputStreamReader(inr, charset);
+            while ((length = reader.read(buf)) != -1) {
+                res.append(buf, 0, length);
+            }
+            reader.close();
+            return new String[]{res.toString(), String.valueOf(httpCode)};
+        } catch (Exception e) {
+            log.error(newurl+"\t"+e.getMessage()); 
+            return null;
+        } finally {
+            try {
+                if (inr != null)
+                    inr.close();
+                if (conn != null)
+                    conn.disconnect();
+            } catch (IOException e) {
+            }
+        }
+    }
+
+
+	@SuppressWarnings("unchecked")
+	public static Map<String, String> getRequestHeaders(
+			HttpServletRequest request) {
+		HashMap<String, String> res = new HashMap<String, String>();
+		Enumeration<String> emu = request.getHeaderNames();
+		while (emu.hasMoreElements()) {
+			String key = emu.nextElement();
+			String value = request.getHeader(key);
+			res.put(key, value);
+		}
+		return res;
+	}
+
+	public static String getSessionString(HttpServletRequest request,
+			final String name,String defaultValue) {
+		String str = defaultValue;
+		Object value = request.getSession().getAttribute(name);
+		if (value != null) {
+			str = (String)value;
+		}
+		return str;
+	}
+
+
+//	public static String getSessionVerifyCode(HttpServletRequest request,
+//			final String name,String defaultValue) {
+//		String code = getSessionString(request, name, defaultValue);
+//		request.getSession().removeAttribute(name);
+//		return code;
+//	}
+
+	public static String getRequestString(HttpServletRequest request,
+			final String name) {
+		return getRequestString(request, name, null);
+	}
+
+	public static String getRequestString(HttpServletRequest request,
+			final String name, final String defaultValue) {
+		String value = request.getParameter(name);
+		if (value == null) {
+			value =  defaultValue;
+		}
+		return value;
+	}
+
+	public static int getRequestInt(HttpServletRequest request,
+			final String name) {
+		return getRequestInt(request, name, 0);
+	}
+
+	public static int getRequestInt(HttpServletRequest request,
+			final String name, int defaultValue) {
+		String value = getRequestString(request, name, null);
+		if (value == null)
+			return defaultValue;
+
+		try {
+			return Integer.parseInt(value.trim());
+		} catch (Exception e) {
+			return defaultValue;
+		}
+	}
+
+	public static long getRequestLong(HttpServletRequest request,
+			final String name) {
+		return getRequestLong(request, name, 0);
+	}
+
+	public static long getRequestLong(HttpServletRequest request,
+			final String name, long defaultValue) {
+		String value = getRequestString(request, name, "");
+		return ParseUtil.paseLong(value, defaultValue);
+	}
+
+	public static String getCookie(HttpServletRequest request, String cname) {
+		Cookie[] cookies = request.getCookies();
+		if(cookies!=null){
+			for(Cookie c :cookies){
+			    if(c.getName().equalsIgnoreCase(cname)){
+			    	return c.getValue();
+			    }
+			}
+		}
+		return null;
+	}
+
+	public static String getIpAddr(HttpServletRequest request) {
+		String ip = request.getHeader("x-source-id");
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("x-forwarded-for");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("X-Forwarded-For");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("Proxy-Client-IP");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getHeader("WL-Proxy-Client-IP");
+		}
+		if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+			ip = request.getRemoteAddr();
+		}
+		
+		
+		/*
+		try{
+			Enumeration e = request.getHeaderNames();
+		    while (e.hasMoreElements()){
+		    	String name = (String) e.nextElement();
+		    	
+		    	String dd = name+"==pppppppp=="+request.getHeader(name);
+		    	LogWriter.runlog(dd);
+		    }
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		*/
+	    
+
+		
+		return ip;
+	}
+
+
+	/*
+	 * 写cookie
+	*/
+	public static void setCookie(HttpServletResponse response,String name,String value){
+		Cookie cookie = new Cookie(name,value);
+		//生命周期
+		cookie.setMaxAge(60*60*24*365);
+		cookie.setPath("/");
+		response.addCookie(cookie);
+	}
+
+
+
+	//test
+	public static String getRequestInfo(HttpServletRequest req) {
+		StringBuffer out = new StringBuffer();
+		out.append("Cookies:\n");
+		Cookie[] cookies = req.getCookies();
+		if (cookies != null && cookies.length > 0) {
+			for (int i = 0; i < cookies.length; i++) {
+				out.append(cookies[i].getName() + "=" + cookies[i].getValue()+"\n");
+				out.append("---\n");
+			}
+		}
+		return out.toString();
+	}
+	
+	public static String replaceUUIDFromURL(String url){
+		if(CommonUtils.isEmpty(url)){
+			return url;
+		}
+		if(url.indexOf("?")==-1){
+			return url;
+		}
+		if(url.indexOf("uuid=")==-1){
+			return url;
+		}
+		
+		if( url.indexOf("&")==-1){
+			return url.substring(0, url.indexOf("?"));
+		}
+		String _url = url.substring(0, url.indexOf("?")+1);
+		String para =  url.substring( url.indexOf("?")+1,url.length());
+		String[] obj = para.split("&");
+		for(String s:obj){
+			if(s.split("=").length==2){
+				String[] ss = s.split("=");
+				if(ss[0].equals("uuid")){
+					continue;
+				}
+				_url+=ss[0]+"="+ss[1]+"&";
+			}
+		}
+		if(_url.lastIndexOf("&")+1 ==_url.length()){
+			_url = _url.substring(0, _url.length()-1);
+		}
+		return _url;
+	}
+	
+	public static void main(String[] args) {
+//		Map<String,String> para = new HashMap<String,String>();
+//		Map<String,String> header = new HashMap<String,String>();
+//		header.put("S_COOKIE", "d7419b6341b8b87628d5bfff5da812ccdb3ef45097c954a9f996950c71b91809ab738da7c7f85e7d50fd2382c0377c594f5538702dcb5894351b129912676ccd");
+//		para.put("clicks", "1\t"+System.currentTimeMillis()+"\n2\t"+System.currentTimeMillis());
+//		para.put("options", "3\t"+System.currentTimeMillis()+"\n4\t"+System.currentTimeMillis());
+//		System.out.println(post("http://221.179.173.175/api/s.do",para,header));
+//		System.out.println(get("http://221.179.173.175/api/g.do?test=true",header));
+//		openUrl("http://221.179.173.131/mpaper/2010/08/20/15/2838/2838_0_28/2838.zip?test=1111111111");
+//		System.out.println(openUrl("http://www.g.cn/"));
+		
+		System.out.println(getUrlContent("http://tv.sohu.com/frag/vrs_inc/search_day_all.js", "gbk"));
+//		String s = "18:50";
+//		String s1= "19:03";
+//		System.out.println(s.compareTo(s1));
+		
+		
+//		System.out.println(DateUtil.getDateByStr("10:11","HH:mm"));
+	}
+
+}

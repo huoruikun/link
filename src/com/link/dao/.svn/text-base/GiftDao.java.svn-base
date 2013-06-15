@@ -1,0 +1,50 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Gift;
+
+@Repository("giftDao")
+public class GiftDao extends BaseJdbcSupport {
+	
+	public List<Gift> list() {
+		String sql = "select * from c_gift";
+		return getInterfaceJdbcTemplate().query(sql, new dataMapper());
+	}
+	
+	public Gift find(int giftCode) {
+		String sql = "select * from c_gift where giftCode=?";
+		List<Gift> giftList = getInterfaceJdbcTemplate()
+			.query(sql, new Object[]{giftCode}, new dataMapper());
+		if(giftList != null && giftList.size() > 0) {
+			return giftList.get(0);
+		}
+		return null;
+	}
+	
+	public void reduce(int giftId, int num) {
+		String sql = "update c_gift set leftNum=leftNum-? where giftCode=?";
+		getInterfaceJdbcTemplate().update(sql, num, giftId);
+	}
+	
+	class dataMapper implements RowMapper<Gift> {
+
+		@Override
+		public Gift mapRow(ResultSet rs, int arg1) throws SQLException {
+			Gift gift = new Gift();
+			gift.setId(rs.getInt("id"));
+			gift.setScore(rs.getInt("score"));
+			gift.setGiftCode(rs.getInt("giftCode"));
+			gift.setLeftNum(rs.getInt("leftNum"));
+			gift.setName(rs.getString("name"));
+			return gift;
+		}
+		
+	}
+	
+}

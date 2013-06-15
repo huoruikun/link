@@ -1,0 +1,61 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PubSubscribeMap;
+
+@Repository("pubSubscribeMapDao")
+public class PubSubscribeMapDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor;
+	
+	@PostConstruct
+	public void init(){
+		this.insertActor = new SimpleJdbcInsert(this.getJdbcTemplate()
+				.getDataSource()).withTableName("p_pub_subscribe_map")
+				.usingGeneratedKeyColumns("id");
+	}
+	
+	public long add(PubSubscribeMap pubSubscribeMap){
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(pubSubscribeMap);		
+		Number num = insertActor.executeAndReturnKey(parameters);
+		if(num != null){
+			return num.longValue();
+		}
+		return 0;
+	}
+	
+	public PubSubscribeMap list(String pubs){
+		String sql = "select * from p_pub_subscribe_map where pageIds=?";
+		List<PubSubscribeMap> resultList = getJdbcTemplate().query(sql, new Object[]{pubs}, new dataMapper());
+		if (resultList!=null && resultList.size()>0)
+			return resultList.get(0);
+		else
+			return null;
+	}
+	
+	
+	
+	class dataMapper implements RowMapper<PubSubscribeMap> {
+
+		@Override
+		public PubSubscribeMap mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			PubSubscribeMap x_ret = new PubSubscribeMap();
+			x_ret.setId(rs.getLong("id"));
+			x_ret.setPageIds(rs.getString("pageIds"));
+			return x_ret;
+		}
+		
+	}
+}

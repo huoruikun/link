@@ -1,0 +1,64 @@
+package com.wap.sohu.mobilepaper.conf;
+
+import java.util.HashMap;
+import java.util.Map;
+
+
+/**
+ * 为了活动下载内容和下载地址加的
+ * 		时间紧迫，没有从platform对应到这样内容的映射，只好先写在程序里面了
+ * 		谁想改成读取配置或者读取数据库也行
+ * @author ruikunh
+ *
+ */
+public class SMSContent {
+	
+	private static Map<Integer, SMSContent> map = new HashMap<Integer, SMSContent>();
+	
+	private String platformName;
+	private String url;
+	
+	SMSContent(int platformId) {
+		switch(platformId){
+		case 1:
+			platformName = "塞班 V3";
+			url = "http://s.itc.cn/s3v1007";
+			break;
+		case 2:
+			platformName = "塞班 V5";
+			url = "http://s.itc.cn/s5v1007";
+			break;
+		case 3:
+			platformName = "安卓";
+			url = "http://s.itc.cn/and1007";
+			break;
+		case 5:
+			platformName = "ios";
+			url = "http://s.itc.cn/ipapp";
+			break;
+		case 6:
+			platformName = "塞班3";
+			url = "http://3g.k.sohu.com";
+			break;
+		case 7:
+			platformName = "WinPhone";
+			url = "http://3g.k.sohu.com";
+			break;
+		}
+	}
+	
+	public static SMSContent getInstance(int platformId) {
+		SMSContent instance = map.get(platformId);
+		if(instance == null) {
+			instance = new SMSContent(platformId);
+			map.put(platformId, instance);
+		}
+		return instance;
+	}
+	
+	public String getSmsContent() {
+		String content = "搜狐新闻，随时随地关注新闻资讯。" + this.platformName + "平台下载地址: " + this.url + " ";
+		return content;
+	}
+	
+}

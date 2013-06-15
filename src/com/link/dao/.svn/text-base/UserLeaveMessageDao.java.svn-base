@@ -1,0 +1,47 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.UserLeaveMessage;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+
+@Repository("userLeaveMessageDao")
+public class UserLeaveMessageDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor = null;
+	
+	@PostConstruct
+	public void init(){
+		insertActor = new SimpleJdbcInsert(
+				getJdbcTemplate().getDataSource()).withTableName("p_user_message")
+				.usingGeneratedKeyColumns("id");
+	}
+	
+	public boolean create(UserLeaveMessage message){
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(message);		
+		Number num = insertActor.executeAndReturnKey(parameters);
+		if(num!=null && num.intValue()>0){
+			return true;
+		}
+		return false;
+	}
+	
+	//当前留言统计
+	public int leaveMsgCount(long cid, int type){
+		try{
+			long todayTime = DateUtil.getToday().getTime();
+			return getJdbcTemplate().queryForInt("select count(1) from p_user_message where cid="+cid+" and type="+type+" and leaveTime>"+todayTime);
+		}catch(Exception e){
+			//e.printStackTrace();
+		}
+		return 0;
+	}
+	
+}

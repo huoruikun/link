@@ -1,0 +1,136 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-15 上午09:21:19
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.wap.sohu.mobilepaper.model.GoldRank;
+import com.wap.sohu.mobilepaper.service.GoldRankService;
+
+/**
+ * @author alex.lee at 2010-11-15 上午09:21:19
+ * 
+ *         desc：
+ */
+public class GoldRankTools {
+
+	public static List<GoldRank> spiderSohuGoldRank() {
+		List<GoldRank> golds = new ArrayList<GoldRank>();
+		try {
+			String html = HttpUtil.getUrlContent("http://data.gz2010.sohu.com/medals.php");
+			if (StringUtils.isNotEmpty(html)) {
+				html = minimizeHtml(html);
+				String infoReg = "<tr>(.*?)</tr>";
+				Pattern pattern = Pattern.compile(infoReg,Pattern.CASE_INSENSITIVE);
+				Matcher matcher = pattern.matcher(html);
+
+				String rankReg = "<span class=\"mun1\">(.*?)</span>";
+				Pattern rankPattern = Pattern.compile(rankReg,
+						Pattern.CASE_INSENSITIVE);
+
+				String countryReg = "medal_type=\" target=\"_blank\">(.*?)</a>";
+				Pattern countryPattern = Pattern.compile(countryReg,
+						Pattern.CASE_INSENSITIVE);
+
+				String goldReg = "medal_type=gold\" target=\"_blank\">(.*?)</a>";
+				Pattern goldPattern = Pattern.compile(goldReg,
+						Pattern.CASE_INSENSITIVE);
+
+				String silverReg = "medal_type=silver\" target=\"_blank\">(.*?)</a>";
+				Pattern silverPattern = Pattern.compile(silverReg,
+						Pattern.CASE_INSENSITIVE);
+
+				String bronzeReg = "medal_type=bronze\" target=\"_blank\">(.*?)</a>";
+				Pattern bronzePattern = Pattern.compile(bronzeReg,Pattern.CASE_INSENSITIVE);
+				
+				while (matcher.find()) {
+					GoldRank goldRank = new GoldRank();
+					String infoStr = matcher.group(1);
+
+					Matcher rankMatcher = rankPattern.matcher(infoStr);
+					while (rankMatcher.find()) {
+						goldRank.setRank(Integer.parseInt(rankMatcher.group(1)));
+					}
+
+					if (goldRank.getRank() == 0)
+						continue;
+
+					Matcher countryMatcher = countryPattern.matcher(infoStr);
+					while (countryMatcher.find()) {
+						goldRank.setCountry(countryMatcher.group(1));
+						break;
+					}
+
+					Matcher goldMatcher = goldPattern.matcher(infoStr);
+					while (goldMatcher.find()) {
+						goldRank.setJingpai(Integer.parseInt(goldMatcher
+								.group(1)));
+					}
+
+					Matcher silverMatcher = silverPattern.matcher(infoStr);
+					while (silverMatcher.find()) {
+						goldRank.setYingpai(Integer.parseInt(silverMatcher
+								.group(1)));
+					}
+
+					Matcher bronzeMatcher = bronzePattern.matcher(infoStr);
+					while (bronzeMatcher.find()) {
+						goldRank.setTongpai(Integer.parseInt(bronzeMatcher
+								.group(1)));
+					}
+					golds.add(goldRank);
+				}
+			}
+			
+		} catch (Exception e) {
+			System.out.println("===============抓取sohu 页面出错==============");
+			PaperUtil.sendMsgAlert("亚运金榜", "抓取sohu页面出错");
+		}
+		return golds;
+	}
+
+	public static String spiderLastUpdateTime(){
+		String html = HttpUtil.getUrlContent("http://data.gz2010.sohu.com/medals.php");
+		String timeS  = "";
+		if (StringUtils.isNotEmpty(html)) {
+			html = minimizeHtml(html);
+			String timeReg = "<h3>(.*?)</h3>";
+			Pattern timePattern = Pattern.compile(timeReg,Pattern.CASE_INSENSITIVE);
+			Matcher timeMatcher = timePattern.matcher(html);
+			while (timeMatcher.find()) {
+				timeS = timeMatcher.group(1);
+				timeS = timeS.substring(timeS.indexOf("截止")+2);
+				break;
+			}
+		}
+		return timeS;
+	}
+	
+	
+	private static String minimizeHtml(String html) {
+		return html.replaceAll("\t", "").replace("\r\n", "").replaceAll("\n",
+				"").replaceAll("\r", "").replaceAll("  ", "");
+	}
+
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		spiderSohuGoldRank();
+		System.out.println(spiderLastUpdateTime());
+	}
+
+}

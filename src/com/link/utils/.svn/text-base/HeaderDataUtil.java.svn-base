@@ -1,0 +1,404 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+
+import com.wap.sohu.mobilepaper.conf.ScookieType;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientSet;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+
+/**
+ * 该类以 mobile-paper-client工程为准
+ * @author jtong
+ *
+ */
+public class HeaderDataUtil {
+	public static String KEY_DECRIPT_KEY = "2D2AE7C87C712EB5";
+	
+	public static final String UserSendChannels = "userSendChannels";
+	public static final String UserSendProducts = "userSendProducts";
+	
+	public static int getIntOne(HttpServletRequest request,String key){
+		int productId = 0 ;
+		try{
+			String userSendProductsStr = (String)request.getAttribute(key);
+			if(userSendProductsStr!=null){
+				productId = Integer.parseInt(userSendProductsStr.split(",")[0]);
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return productId;
+	}
+	
+	
+	public static ClientSet getClientSet( HttpServletRequest request){
+		ClientSet clientSet = null;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");		
+		
+		int productIdSend = 1;
+		String productIdSendStr = (String)request.getAttribute("u");
+		try{
+			productIdSend = Integer.parseInt(productIdSendStr);
+		}catch(Exception e){
+			// e.printStackTrace();
+			
+//			System.out.println("productIdSendStr err:"+productIdSendStr);
+		}
+		
+		if(clientUser != null){
+			clientSet = clientUser.getClientSet(productIdSend);//.getUserSetMap().get(productIdSend);
+		}
+		if(clientSet == null){
+			return new ClientSet();
+		}
+		
+		return clientSet;
+	}
+	
+	public static String decryptScookie(String s_cookie, ScookieType type) {
+		if(StringUtils.isEmpty(s_cookie)) {
+			return null;
+		}
+		String s_cookietmp = null;
+		if(type == ScookieType.COMMON) {
+			String decriptKey = KEY_DECRIPT_KEY;
+			s_cookietmp = ToolsAesCrypt.Decrypt(s_cookie, decriptKey);
+			if (s_cookietmp == null) {
+				s_cookietmp = ToolsAesCrypt.Decrypt(s_cookie, decriptKey
+						.toLowerCase());
+			}
+		}
+		if(type == ScookieType.WINPHONE) {
+			String decriptKey = KEY_DECRIPT_KEY;
+			try{
+				s_cookietmp = ToolsAesCbcCrypt.Decrypt(s_cookie, decriptKey);
+			}catch(Exception e) {
+				e.printStackTrace();
+			}
+		}
+		return s_cookietmp;
+	}
+	
+	
+	public static ClientUser getClientUser(String s_cookietmp,HttpServletRequest request,HttpServletResponse response) {
+		if (s_cookietmp == null) {
+			return null;
+		}
+		
+		int protocolVerstion =0;		
+		String[] s_cookieArray = s_cookietmp.split("\\|");
+		if (s_cookieArray!=null&&s_cookieArray.length > 5) {
+			protocolVerstion = 1;
+		}else {
+			s_cookieArray = s_cookietmp.split("&");
+			if (s_cookieArray!=null) {
+				protocolVerstion = 2;
+			}
+		}
+		
+		if(protocolVerstion == 0){
+			return null;
+		}
+	
+		ClientUser clientUser = null;
+		switch(protocolVerstion){
+		case 1:
+			clientUser = getUserDataFromProtocolV1(s_cookieArray, request);
+			break;
+		case 2:
+			clientUser = getUserDataFromProtocolV2(s_cookieArray, request);
+			break;
+		}
+		if(clientUser==null){
+			return null;
+		}
+		
+		return clientUser;
+	}
+
+	private static ClientUser getUserDataFromProtocolV1(String[] s_cookieArray ,HttpServletRequest request ){
+		String version = null;
+		String platform = null;
+		String IMEI = null;
+		String fr = null;
+		String machineId = null;
+		long cid = 0;
+		String passport = null;
+		
+		
+		String header = s_cookieArray[0];
+		if (header.contains(",") && header.split(",").length == 2) {
+			if (ParseUtil.paseInt(header.split(",")[1], 0) != s_cookieArray.length - 1) {
+				return null;
+			}
+			String[] _s_cookieArray = new String[s_cookieArray.length - 1];
+			for (int i = 1; i < s_cookieArray.length; i++) {
+				_s_cookieArray[i - 1] = s_cookieArray[i];
+			}
+			s_cookieArray = _s_cookieArray;
+			_s_cookieArray = null;
+		}
+
+		if (s_cookieArray.length > 0) {
+			version = s_cookieArray[0];
+			platform = s_cookieArray[1].toUpperCase();
+			try {
+				fr = URLEncoder.encode(s_cookieArray[2], "GBK");
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+			IMEI = s_cookieArray[3];
+//			IMSI = s_cookieArray[4];
+//			pixel = s_cookieArray[5];
+			if (s_cookieArray.length > 6) {
+				machineId = s_cookieArray[6];
+			}
+			if (s_cookieArray.length > 7) {
+				cid = ParseUtil.paseInt(s_cookieArray[7], 0);
+			}
+			if (s_cookieArray.length > 8) {
+				passport = s_cookieArray[8];
+			}
+
+		}
+		ClientUser clientUser = new ClientUser();
+		clientUser.setIMEI(IMEI);
+		clientUser.setPlatform(platform);
+		clientUser.setMachineId(machineId);
+		
+
+		
+		ClientInstall clientInstall = new ClientInstall();
+		clientInstall.setLastVisit(new java.util.Date());
+		clientInstall.setVersion(version);
+		int channelId = 0 ;
+		try{
+			channelId = Integer.parseInt(fr);
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		clientInstall.setChannelId(channelId);
+		clientInstall.setProductId(1);
+		request.setAttribute("clientInstall", clientInstall);
+		
+		
+		clientUser.setPassport(passport);
+		clientUser.setCid(cid);
+		return clientUser;
+	}
+	
+	
+	
+	private static Map<String, String> scookieDataMap(String[] s_cookieArray) {
+		
+		Map<String,String> map = new HashMap<String,String>();
+		for(String s:s_cookieArray){
+			try{
+				int index = s.indexOf("=");
+				String key = null;
+				String value = null;
+				if (index > 0 && s.length() > index) {
+					key = s.substring(0, index);
+					value = s.substring(index+1);
+				}
+				if(key != null && value != null) {
+					map.put(key, value);
+				}
+			}catch(Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+//		for(String key : map.keySet()) {
+//			System.out.println(key + " = "+map.get(key));
+//		}
+		return map;
+	}
+	
+	
+	private static ClientUser getUserDataFromProtocolV2(String[] s_cookieArray ,HttpServletRequest request ){
+		Map<String,String> map = scookieDataMap(s_cookieArray);
+		
+		ClientInstall clientInstall = new ClientInstall();
+		 
+		ClientUser clientUser = new ClientUser();
+		clientUser.setProtocol(ParseUtil.paseInt(map.get("a"), 1));
+		clientInstall.setApiVersion(clientUser.getProtocol());
+		clientUser.setCid(ParseUtil.paseLong(map.get("b"), 0));
+		if(map.containsKey("c"))
+		clientUser.setIMEI(map.get("c").replace(" ", ""));
+		if(map.containsKey("f"))
+		clientUser.setPlatform(map.get("f"));
+		if(map.containsKey("g"))
+		clientUser.setPlatformVersion(map.get("g"));
+		
+		
+		clientInstall.setLastVisit(new java.util.Date());
+		
+		if(map.containsKey("e")){
+			String version = null ;
+			try{
+				version = map.get("e");
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			clientInstall.setVersion(version);
+		}
+		
+		if(map.containsKey("i"))
+		clientUser.setMachineId(map.get("i"));
+		
+		
+		if(map.containsKey("j")){
+			int channelId = 0 ;
+			try{ 
+				channelId = NumberUtils.toInt(map.get("j"),0);
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			clientInstall.setChannelId(channelId);
+			clientInstall.setCurrentChannelId(channelId);
+		}
+		
+		// 新加上的产品id
+		int productId = 1;
+		if(map.containsKey("u")){
+			try{
+				productId = Integer.parseInt(map.get("u"));
+			}catch(Exception e){
+				e.printStackTrace();
+				productId = 1;
+			}
+			
+			if(productId == 0 ){
+				productId = 1;
+			}
+			
+			clientInstall.setProductId(productId);
+			
+		}
+		
+		
+		if(map.containsKey("m"))
+		clientUser.setPassport(map.get("m"));
+		if(map.containsKey("p"))
+		clientUser.setToken(map.get("p"));
+		if(map.containsKey("h"))
+			clientUser.setResolution(map.get("h"));
+		if(map.containsKey("q")) {//V3 update 网络运营
+			clientUser.setNetwork(map.get("q")); 
+		}if(map.containsKey("r"))
+			clientUser.setInstallTime(ParseUtil.paseLong(map.get("r"),0)); //安装时间
+		if(map.containsKey("s")){
+			int isActive = 0;
+			try{
+				if (StringUtils.isNotEmpty(map.get("s"))) {
+					isActive = ParseUtil.paseInt(map.get("s"), 0);
+					// 如果不是5,6开头的渠道，默认激活
+					String channelStr = String.valueOf(clientInstall
+							.getChannelId());
+					if (StringUtils.isEmpty(channelStr) || (!channelStr.startsWith("5")
+							&& !channelStr.startsWith("6"))) {
+						isActive = 1;
+					}
+					if (isActive == 0) { // 明确传了 没有激活
+						request.setAttribute("noActive", 1);
+					}
+				}
+				
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			clientInstall.setIsActive(isActive);
+		}
+		
+		if(map.containsKey("x")) {
+			int loadingPageId = ParseUtil.paseInt(map.get("x"), 0);
+			clientInstall.setLoadingPageId(loadingPageId);
+		}
+		
+		String intelligentPackage = map.get("y");
+		if(intelligentPackage != null && intelligentPackage.compareToIgnoreCase("1") == 0) {
+			clientInstall.setIntelligentPackage(true);
+		}
+		
+		// 关闭接收的处理
+		int v = 0;
+		if(map.containsKey("v")){
+			try{
+				v = Integer.parseInt(map.get("v"));
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		request.setAttribute("v", v);
+		
+		
+		
+		request.setAttribute("clientInstall", clientInstall);
+			
+		
+		if(map.containsKey("t")){
+			
+			ClientSet clientSet = clientUser.getUserSetMap().get(productId);
+			if(clientSet==null){
+				clientSet = new ClientSet();
+				clientSet.setProductId(productId);
+				clientUser.getUserSetMap().put(productId, clientSet);
+			}
+			clientSet.setZipPolicy(ParseUtil.paseInt(map.get("t"),-1));
+			
+			clientUser.setIsReceiveZipPolicy(1);
+		}
+		
+		return clientUser;
+	}
+	
+	
+	
+	public static String toProtocalString(ClientUser clientUser,String userSendProductId  ){
+		return toProtocalString( clientUser, userSendProductId ,  0 );
+	}
+	
+	public static String toProtocalString(ClientUser clientUser,String userSendProductId , int sendChannelId ){
+		if(clientUser==null){
+			return "";
+		}
+		 StringBuffer str = new StringBuffer();
+		 str.append("a="+clientUser.getProtocol());
+		 str.append("&b="+clientUser.getCid());
+		 str.append("&c="+clientUser.getIMEI());
+		 str.append("&d="+clientUser.getProtocol());
+		 str.append("&e=");
+		 str.append("&f="+clientUser.getPlatform());
+		 str.append("&g="+clientUser.getPlatformVersion());
+		 str.append("&h="+clientUser.getResolution());
+		 str.append("&i="+clientUser.getMachineId());
+		 str.append("&j="+sendChannelId);
+		 str.append("&m="+clientUser.getPassport());
+		 str.append("&q="+clientUser.getNetwork());
+		 str.append("&r="+clientUser.getInstallTime());
+		 str.append("&s=");
+		 str.append("&t="+userSendProductId); // t字段为此次请求带着的 productId
+		return str.toString();
+	}
+	
+	public static String toProtocalString(ClientUser clientUser){
+		return toProtocalString( clientUser ,"");
+	}
+	
+	public static void main(String[] args) {
+		String scookie = "a=4&b=0&c=A%3d26865D48F9155E957683A1A6FFFFFFFF%26E%3dc06%26W%3d1&e=1.00&f=WindowsPhone&g=7&h=480x800&i=HTC--7 Mozart T8698&j=0&p=&u=0";
+		//scookieDataMap(scookie);
+	}
+}

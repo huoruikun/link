@@ -1,0 +1,169 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.logging.LogFactory;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.conf.PubType;
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.LRUMap;
+
+@Repository("publicationDao")
+public class PublicationDao extends BaseJdbcSupport {
+	LRUMap<String, List<Publication>> map = new LRUMap<String, List<Publication>>("publication_list", 60, 1200);
+	LRUMap<Integer, Set<Integer>> defaultDefaultMap = new LRUMap<Integer, Set<Integer>>("defaultDefaultMap", 60, 1200);
+
+	/**
+	 * @todo 需要优化 add by wangjia
+	 * @return
+	 */
+	public List<Publication> list() {
+		List<Publication> list = map.get("publication_list");
+		if (CommonUtils.isEmpty(list)) {
+			list = listNoCache();  
+			map.put("publication_list", list);
+		}
+		return list;
+	}
+
+	public List<Publication> listNoCache() {
+
+		String SQL_QUERY = "select * from p_publication_info ";
+		List<Publication> list = this.getJdbcTemplate().query(SQL_QUERY, new dataMapper());
+
+		for (Publication pub : list) {
+			int broadCastTimeBegin = 0;
+			int broadCastTimeEnd = 24;
+
+			String broadCastTime = pub.getBroadCastTime();
+			if (broadCastTime != null && !"".equals(broadCastTime)) {
+				String[] broadCastTimeArr = broadCastTime.split(",");
+				if (broadCastTimeArr != null && broadCastTimeArr.length == 2) {
+					try {
+						broadCastTimeBegin = Integer.parseInt(broadCastTimeArr[0]);
+						broadCastTimeEnd = Integer.parseInt(broadCastTimeArr[1]);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+			Set<Integer> defaultSet = listDefaultPubIdLSet(pub.getProductId());
+			if (defaultSet.contains(pub.getId())) {
+				pub.setDefaultPub(true);
+			}
+			pub.setBroadCastTimeBegin(broadCastTimeBegin);
+			pub.setBroadCastTimeEnd(broadCastTimeEnd);
+
+		}
+
+		return list;
+	}
+
+	public Set<Integer> listDefaultPubIdLSet(int productId) {
+		Set<Integer> set = defaultDefaultMap.get(productId);
+		if (set == null) {
+			List<Integer> idList = this.getJdbcTemplate().queryForList(
+					"select pubId from p_product_pub where productId=?", new Object[] { productId }, Integer.class);
+			set = new HashSet<Integer>();
+			if (idList != null) {
+				for (Integer pubId : idList) {
+					set.add(pubId);
+				}
+			}
+			defaultDefaultMap.put(productId, set);
+		}
+		return set;
+	}
+
+	public Publication find(int publicId) {
+		List<Publication> list = list();
+		for (Publication pub : list) {
+			if (pub.getId() == publicId) {
+				return pub;
+			}
+		}
+		return null;
+	}
+
+	public boolean isMsgPaper(int publicId) {
+		List<Publication> list = list();
+		for (Publication pub : list) {
+			if (pub.getId() == publicId && pub.getPubType() == PubType.msgPaper.getValue()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private class dataMapper implements RowMapper<Publication> {
+		public Publication mapRow(ResultSet rs, int rowNum) throws SQLException {
+			Publication pub = new Publication();
+			pub.setId(rs.getInt("id"));
+			pub.setProductId(rs.getInt("productId"));
+			pub.setPubName(rs.getString("pubName"));
+			pub.setPubType(rs.getInt("pubType"));
+			pub.setSenderName(rs.getString("senderName"));
+
+			pub.setBroadCast(rs.getInt("broadCast"));
+			pub.setBroadCastArea(rs.getString("broadCastArea"));
+			pub.setBroadCastGroup(rs.getString("broadCastGroup"));
+			pub.setZipArea(rs.getInt("zipArea"));
+
+			pub.setZipPolicy(rs.getInt("zipPolicy"));
+
+			pub.setBroadCastTime(rs.getString("broadCastTime"));
+
+			pub.setDisplayWeather(rs.getInt("displayWeather"));
+
+			pub.setViewPubId(rs.getInt("viewPubId"));
+			pub.setStatus(rs.getInt("status"));
+			pub.setShowWeight(rs.getInt("showWeight"));
+			pub.setPubInfo(rs.getString("pubInfo"));
+
+			return pub;
+		}
+	}
+
+	/**
+	 * 查询某个产品下的可订阅刊物列表
+	 * 
+	 * @param productId
+	 * @param order
+	 *            0 按照人气（显示权重） 1 按照创建日期（最新推荐）
+	 * @return
+	 */
+	public List<Publication> listSubscribe(int productId, int order) {
+		String orderStr = "order by showWeight desc";
+		if (order == 1) {
+			orderStr = "order by id desc";
+		}
+		List<Publication> list = getJdbcTemplate().query(
+ 
+				"select * from p_publication_info where productId=? and status=1 and pubType=? " + orderStr,
+				new Object[] { productId, PubType.subscribePaper.getValue() }, new dataMapper());  
+ 
+		return list;
+	}
+
+	public void updateWeight(int pubId, int weight) {
+		// System.out.println("update Weight pubId="+pubId+",  weight="+weight);
+		getJdbcTemplate().update("update p_publication_info set showWeight=? where id=?",
+				new Object[] { weight, pubId });
+	}
+
+	// public List<Publication> listPublication(int productId){
+	// List<Publication> pubList = getJdbcTemplate().query(
+	// "select * from p_publication_info where catalogId=? and status=1",
+	// new Object[]{productId},
+	// new dataMapper());
+	// return pubList;
+	// }
+}

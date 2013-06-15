@@ -1,0 +1,710 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.RandomAccessFile;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.security.MessageDigest;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Random;
+
+import javax.servlet.ServletInputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+
+@SuppressWarnings("unchecked")
+public class Tools {
+
+    final static Random rand = new Random();
+
+    public static boolean equalsStr(String src, String dest) {
+        if ((src == null && dest != null) || (src != null && dest == null)) {
+            return false;
+        }
+        return src.equals(dest);
+    }
+
+    final static SimpleDateFormat sdf = new SimpleDateFormat(
+            "yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * java.io.IOException: Lock obtain timed out:
+     * Lock@d:\Temp\lucene-7d5d784a68e117bf 5f250e77ead5f783-write.lock
+     *
+     * @param e
+     * @return
+     */
+    public static boolean clearLock(Exception e) {
+        String msg = e.getMessage();
+        int index = msg.indexOf("Lock@");
+        if (index > 0) {
+            String lockFileName = msg.substring(index + 5);
+            return delete(new File(lockFileName));
+        }
+        return false;
+    }
+
+    public static int getReqInt(HttpServletRequest request, String name,
+                                int defaultValue) {
+        String value = request.getParameter(name);
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+
+    }
+
+    public static long getReqLong(HttpServletRequest request, String name,
+                                  long defaultValue) {
+        String value = request.getParameter(name);
+        try {
+            return Long.parseLong(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+
+    }
+
+
+    public static void close(Object... objects) {
+        for (Object object : objects) {
+            Tools.close(object);
+        }
+    }
+
+    public static String getRandPassword(int length) {
+        StringBuffer buf = new StringBuffer();
+        for (int i = 0; i < length; i++) {
+            int n = rand.nextInt(10);
+
+            buf.append(n);
+        }
+        return buf.toString();
+    }
+
+    public static String getRandString(int length) {
+        StringBuffer buf = new StringBuffer();
+        for (int i = 0; i < length; i++) {
+            int n = rand.nextInt(0xF);
+            char c;
+            if (n >= 10) {
+                c = (char) ('A' + n - 10);
+            } else {
+                c = (char) ('0' + n);
+            }
+
+            buf.append(c);
+        }
+        return buf.toString();
+
+    }
+
+    public static String encode(String str) {
+        if (str == null) {
+            return "";
+        }
+        StringBuffer buf = new StringBuffer();
+        try {
+            byte[] data = str.getBytes("UTF-8");
+            for (int i = 0; i < data.length; i++) {
+                int d = data[i];
+                // System.out.println(d);
+                if (d < 0) {
+                    d = -d;
+                }
+                int first = d / 26;
+                int second = d % 26;
+                if (data[i] >= 0) {
+                    buf.append((char) ('A' + first));
+                    buf.append((char) ('A' + second));
+                } else {
+                    buf.append((char) ('a' + first));
+                    buf.append((char) ('a' + second));
+                }
+                // System.out.println(buf);
+
+            }
+        } catch (Exception e) {
+
+        }
+        return buf.toString();
+    }
+
+    public static String decode(String str) {
+        if (str == null) {
+            return "";
+        }
+        try {
+            char[] ch = str.toCharArray();
+            byte[] data = new byte[ch.length / 2];
+            for (int i = 0; i < ch.length - 1; i += 2) {
+                char first = ch[i];
+                char second = ch[i + 1];
+                int d = 0;
+                if (first >= 'A' && first <= 'Z') {
+                    d = (first - 'A') * 26 + (second - 'A');
+                } else {
+                    d = -((first - 'a') * 26 + (second - 'a'));
+                }
+                // System.out.println(d);
+                data[i / 2] = (byte) d;
+            }
+
+            return new String(data, 0, data.length, "UTF-8");
+        } catch (Exception e) {
+
+        }
+        return null;
+    }
+
+    /**
+     * �����ˢ�µ��ͻ���
+     *
+     * @param data
+     * @param response
+     */
+    public static void flushData(byte[] data, HttpServletResponse response) {
+        OutputStream out = null;
+        try {
+            out = response.getOutputStream();
+            out.write(data);
+            out.close();
+        } catch (Exception e) {
+        }
+
+    }
+
+    public static void close(Connection con, PreparedStatement ps, ResultSet rs) {
+        if (rs != null) {
+            try {
+                rs.close();
+            } catch (Exception e) {
+            }
+        }
+        if (ps != null) {
+            try {
+                ps.close();
+            } catch (Exception e) {
+
+            }
+        }
+        if (con != null) {
+            try {
+                con.close();
+            } catch (Exception e) {
+            }
+        }
+    }
+
+    public static int getPageTotal(int num, int max) {
+
+        int p = num / max;
+        if (num % max != 0) {
+            p++;
+        }
+        return p;
+    }
+
+    public static String traceException(String msg, Exception e) {
+        StringWriter writer = new StringWriter();
+        writer.write("<font color='red'>");
+        writer.write(msg);
+        writer.write("<br/>");
+        PrintWriter pw = new PrintWriter(writer);
+        e.printStackTrace(pw);
+        writer.write("</font>");
+        String info = writer.toString();
+        info = info.replaceAll("[\\r\\n]+", "<br/>");
+        return info;
+    }
+
+    public static String trim(String str) {
+        if (str == null) {
+            return "";
+        }
+        return str.trim();
+    }
+
+    public static String getDate(int plusDate) {
+        Calendar now = Calendar.getInstance();
+        now.add(Calendar.DATE, plusDate);
+        int year = now.get(Calendar.YEAR);
+        int month = now.get(Calendar.MONTH) + 1;
+        int day = now.get(Calendar.DAY_OF_MONTH);
+        StringBuffer buf = new StringBuffer();
+        buf.append(year);
+        buf.append("-");
+        if (month < 10) {
+            buf.append("0");
+        }
+        buf.append(month);
+        buf.append("-");
+        if (day < 10) {
+            buf.append("0");
+        }
+        buf.append(day);
+        return buf.toString();
+    }
+
+    public static String getToday() {
+        return getDate(0);
+
+    }
+
+    public static String toPercent(double d) {
+        if (d < 0.0001) {
+            return "0.0%";
+        }
+
+        String s = String.valueOf(d * 1.0000001 * 100);
+
+        int index = s.indexOf(".") + 3;
+
+        return s.substring(0, index) + "%";
+
+    }
+
+    public static String getReq(HttpServletRequest request, String name,
+                                String defaultValue) {
+        String value = request.getParameter(name);
+        if (value == null) {
+            return defaultValue;
+        }
+        return value;
+    }
+
+    public static long getReqParameterLong(HttpServletRequest request,
+                                           String name, long defaultValue) {
+        String value = request.getParameter(name);
+        try {
+            return Long.parseLong(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+    }
+
+    public static int getReqParameterInt(HttpServletRequest request, String name,
+                                         int defaultValue) {
+        String value = request.getParameter(name);
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+    }
+
+    public static long getReqHeaderLong(HttpServletRequest request,
+                                        String name, long defaultValue) {
+        String value = request.getHeader(name);
+        try {
+            return Long.parseLong(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+    }
+
+    public static int getReqHeaderInt(HttpServletRequest request, String name,
+                                      int defaultValue) {
+        String value = request.getHeader(name);
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception e) {
+        }
+        return defaultValue;
+    }
+
+    
+	public static String getLocalHostIP() {
+        String value = null;
+        try {
+            Enumeration netInterfaces = NetworkInterface.getNetworkInterfaces();
+            InetAddress ip = null;
+            while (netInterfaces.hasMoreElements()) {
+                NetworkInterface ni = (NetworkInterface) netInterfaces.nextElement();
+                ip = (InetAddress) ni.getInetAddresses().nextElement();
+                if (ip.getHostAddress().startsWith("10")) {
+                    value = ip.getHostAddress();
+                    break;
+                } else {
+                    value = ip.getHostName();
+                    break;
+                }
+            }
+            return value;
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static String getReqHeader(HttpServletRequest request, String name,
+                                      String defaultValue) {
+        String value = request.getHeader(name);
+        if (value == null) {
+            return defaultValue;
+        }
+        return value;
+    }
+
+    public static String getReqHeader(HttpServletRequest request, String name1,
+                                      String name2, String defaultValue) {
+        String value = request.getHeader(name1);
+        if (value == null) {
+            value = request.getHeader(name2);
+        }
+        if (value == null) {
+            return defaultValue;
+        }
+        return value;
+    }
+
+
+    public static boolean delete(File dir) {
+        boolean s = true;
+        if (dir.isDirectory()) {
+            File[] files = dir.listFiles();
+
+            for (int i = 0; i < files.length; i++) {
+                s &= delete(files[i]);
+            }
+        }
+        s &= dir.delete();
+        try {
+            if (!s) {
+                Runtime rt = Runtime.getRuntime();
+                Process p = rt.exec("/bin/rm -rf " + dir.getAbsolutePath());
+                p.destroy();
+            }
+        } catch (Exception e) {
+        }
+        return s;
+    }
+
+    public static void block(long time) {
+        try {
+            Thread.sleep(time);
+        } catch (Exception e) {
+        }
+    }
+
+    public static String readLine(InputStream in) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        int data = 0;
+
+        while ((data = in.read()) > -1) {
+            if (data == '\r') {
+                continue;
+            }
+            if (data == '\n') {
+                break;
+            }
+            bos.write((byte) data);
+        }
+        byte[] buf = bos.toByteArray();
+
+        return new String(buf, 0, buf.length, "GBK");
+    }
+
+    public static String shortString(String str) {
+        int max = 20;
+        StringBuilder buf = new StringBuilder();
+        char[] ch = str.toCharArray();
+        for (int i = 0; i < ch.length; i++) {
+            // ȡ���Ƿ������ַ�Ϳո�
+            if (ch[i] != 12288 && ch[i] != 58853 && ch[i] != 58865
+                    && ch[i] != ' ') {
+                buf.append(ch[i]);
+            }
+            if (buf.length() >= max) {
+                break;
+            }
+
+        }
+        return buf.toString();
+    }
+
+    public static Date addDay(Date date, int day) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.DATE, day);
+        return cal.getTime();
+
+    }
+
+    public static String byteArrayToHexString(byte[] b) {
+        StringBuffer resultSb = new StringBuffer();
+        for (int i = 0; i < b.length; i++) {
+            resultSb.append(byteToHexString(b[i]));
+        }
+        return resultSb.toString();
+    }
+
+    private final static String[] hexDigits = {"0", "1", "2", "3", "4", "5",
+            "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"};
+
+    private static String byteToHexString(byte b) {
+        int n = b;
+        if (n < 0)
+            n = 256 + n;
+        int d1 = n / 16;
+        int d2 = n % 16;
+        return hexDigits[d1] + hexDigits[d2];
+    }
+
+    public static String MD5Encode(String origin) {
+        String resultString = null;
+        try {
+            resultString = new String(origin);
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            resultString = byteArrayToHexString(md.digest(resultString
+                    .getBytes()));
+        } catch (Exception ex) {
+        }
+        return resultString;
+    }
+
+    public static String format(Date date) {
+        return sdf.format(date);
+    }
+
+
+    public static List toSplitStringByKey(String content, String splitKey) {
+        String[] arrayStr = content.split(splitKey);
+        ArrayList<String> retList = new ArrayList<String>();
+
+        for (int i = 0; i < arrayStr.length; i++) {
+            if (i % 2 == 1) {
+                retList.add(arrayStr[i]);
+            }
+        }
+
+        return retList;
+    }
+
+    public static int readFile(String fileName) {
+        try {
+            File file = new File(fileName);
+            if (!file.exists()) {
+                file.createNewFile();
+                return 0;
+            }
+            byte[] buffer = new byte[1024];
+            int length = 0;
+            int total = 0;
+            FileInputStream in = new FileInputStream(file);
+            while ((length = in.read(buffer)) != -1) {
+                total += length;
+            }
+            in.close();
+            return total;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+
+    public static void writeFile(String fileName, int fileSize,
+                                 ServletInputStream stre, int haveData) {
+        try {
+            int length = 0;
+            byte[] buffer = new byte[1024];
+            //URLDecoder.decode(fileName, "UTF-8");
+            //fileName = new String(fileName.getBytes("GBK"),"ISO8859_1");
+            File file = new File(fileName);
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+            FileOutputStream fileOut = new FileOutputStream(file, true);
+            System.out.println("haveData : " + haveData);
+            try {
+                if (haveData > 0) {
+                    buffer = new byte[fileSize];
+                    length = stre.read(buffer);
+                    System.out.println("length : " + length);
+                    int splitLength = fileSize - haveData;
+                    System.out.println("splitLength : " + splitLength);
+                    if (splitLength > 0) {
+                        fileOut.write(buffer, haveData, fileSize - haveData);
+                    }
+                } else {
+                    while ((length = stre.read(buffer)) != -1) {
+                        fileOut.write(buffer, 0, length);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                fileOut.flush();
+                fileOut.close();
+                stre.close();
+            }
+            fileOut.flush();
+            fileOut.close();
+            stre.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (stre != null) {
+                try {
+                    stre.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        /*
+          try {
+              int length = 0;
+              byte[] buffer = new byte[1024];
+              URLDecoder.decode(fileName, "UTF-8");
+              File file = new File(fileName);
+               if(!file.exists()){
+                   file.createNewFile();
+               }
+               FileOutputStream fileOut = new FileOutputStream(file,true);
+               if(haveData > 0){
+                  byte[] temp = new byte[1024-haveData];
+                  int j=0;
+                  /*
+                  for(int i=haveData;i< buffer.length;i++){
+                          j++;
+                          temp[j] = buffer[i];
+                  }*/
+        /*
+                  while((length = stre.read(buffer)) != -1) {
+                      if (j > 0) {
+                          fileOut.write(buffer, 0, length);
+                      } else {
+                          fileOut.write(buffer, haveData, 1024-haveData);
+                      }
+                      j++;
+                  }
+              } else {
+                  while((length = stre.read(buffer)) != -1) {
+                      fileOut.write(buffer, 0, length);
+                  }
+              }
+               fileOut.flush();
+               fileOut.close();
+
+          } catch (Exception e) {
+              System.out.println("error��" + e);
+          }*/
+    }
+
+    public static String readTxtFile(String filePath) {
+        String retValue = "";
+        try {
+            File file = new File(filePath);
+            InputStreamReader read = new InputStreamReader(new FileInputStream(file), "UTF-8");
+
+            BufferedReader reader = new BufferedReader(read);
+            String line = null;
+            while ((line = reader.readLine()) != null) {
+                retValue += line + "\r\n";
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return retValue;
+    }
+
+    public static String execCommand(String commandLine) throws IOException {
+        Process p = null;
+        String line = "";
+        try {
+            if (p != null) {
+                p.destroy();
+                p = null;
+            }
+            p = Runtime.getRuntime().exec(commandLine);
+            p.waitFor();
+//            int ret = p.exitValue();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return line;
+    }
+
+    public static String getDateFormat(String formatDate) {
+        String date = null;
+        SimpleDateFormat formater = new SimpleDateFormat(formatDate);
+        Calendar now = Calendar.getInstance();
+        now.add(Calendar.DATE, -0);
+        date = formater.format(now.getTime());
+        return date;
+    }
+
+    public static void storeMsgToFile(String msg, String storePath) {
+        try {
+            FileWriter fw = null;
+            BufferedWriter bw = null;
+            fw = new FileWriter(storePath, true);
+            bw = new BufferedWriter(fw);
+            bw.write(msg);
+            bw.flush();
+            fw.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void writeFileLoad(String fileName, int fileStart,
+                                     ServletInputStream stre) {
+        try {
+            RandomAccessFile oSavedFile = new RandomAccessFile(fileName, "rw");
+            System.out.println("file Start :��" + fileStart);
+            oSavedFile.skipBytes(fileStart);
+            byte[] b = new byte[1024];
+            int nRead;
+            // ���������ж����ֽ�����Ȼ��д���ļ���
+            while ((nRead = stre.read(b, 0, 1024)) > 0) {
+                (oSavedFile).write(b, 0, nRead);
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public static boolean isVilableList(ArrayList list) {
+        return (list != null && list.size() > 0);
+    }
+
+    public static boolean isVilableString(String str) {
+        return (str != null && str.length() > 0);
+    }
+
+	public static void main(String[] agrs) throws UnsupportedEncodingException {
+		System.out.println(new String(Base64.decodeBase64("MA==".getBytes("utf-8"))));
+		System.out.println(Integer.toHexString(30420));
+	}
+
+}

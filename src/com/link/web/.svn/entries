@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="15803"
+   name=""
+   committed-date="2012-03-29T08:02:35.659937Z"
+   url="http://svn.k.sohu.com:8080/repos/projects/mobile-paper/client/mobile-paper-client-branch-20110613/src/com/wap/sohu/mobilepaper/web"
+   last-author="zhujianbo"
+   kind="dir"
+   uuid="73873ba6-098b-4a5a-8209-8b162c7eccbb"
+   repos="http://svn.k.sohu.com:8080/repos/projects"
+   revision="15852"/>
+<entry
+   committed-rev="12951"
+   name="WelcomeServlet.java"
+   text-time="2012-03-23T02:26:18.194315Z"
+   committed-date="2011-12-29T10:01:13.603619Z"
+   checksum="d1239949cec88451e57a6c9dfbee7e8f"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.975671Z"/>
+<entry
+   committed-rev="14009"
+   name="SurveyController.java"
+   text-time="2012-03-23T02:26:18.209932Z"
+   committed-date="2012-02-14T13:14:31.235999Z"
+   checksum="3f8cf683833ee0a866d8dbbb03639368"
+   last-author="jiangtao"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.975671Z"/>
+<entry
+   committed-rev="12436"
+   name="MobileCheckServerStatusController.java"
+   text-time="2012-03-23T02:26:18.209932Z"
+   committed-date="2011-12-19T08:33:57.506970Z"
+   checksum="2a4e9ddffc4e3e46b97fd80557e4dec9"
+   last-author="hanliujie"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.975671Z"/>
+<entry
+   committed-rev="15471"
+   name="ClientCommentController.java"
+   text-time="2012-03-26T10:43:25.990502Z"
+   committed-date="2012-03-23T06:33:35.355999Z"
+   checksum="b40a43e3fe06984a832f984dec2955c3"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-26T10:43:25.225303Z"/>
+<entry
+   committed-rev="4009"
+   name="GoldRankController.java"
+   text-time="2012-03-23T02:26:18.241167Z"
+   committed-date="2011-03-17T11:54:41.635501Z"
+   checksum="d597cc4c6089a46b0ac99e8ade6485fd"
+   last-author="cuijianhua"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.006906Z"/>
+<entry
+   committed-rev="14462"
+   name="HistoryController.java"
+   text-time="2012-03-23T02:26:18.225550Z"
+   committed-date="2012-03-02T03:55:51.982311Z"
+   checksum="cb7fef0b6f738f9840957899ff14f554"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.991289Z"/>
+<entry
+   committed-rev="14300"
+   name="LeaveMessageController.java"
+   text-time="2012-03-23T02:26:18.225550Z"
+   committed-date="2012-02-27T10:00:54.264883Z"
+   checksum="dcd427cf1a62e6dbae9e510273f922f2"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:17.991289Z"/>
+<entry
+   committed-rev="11809"
+   name="ClientNewsS40Controller.java"
+   text-time="2012-03-23T02:26:18.272402Z"
+   committed-date="2011-11-30T09:23:42.973912Z"
+   checksum="42a037789a396a718ac9e0a72e77fa09"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.038141Z"/>
+<entry
+   committed-rev="15471"
+   name="CommentController.java"
+   text-time="2012-03-26T10:43:26.240363Z"
+   committed-date="2012-03-23T06:33:35.355999Z"
+   checksum="9f11966dc8e1a10fb5991cac5c1e21b1"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-26T10:43:25.350234Z"/>
+<entry
+   committed-rev="15490"
+   name="ShareController.java"
+   text-time="2012-03-26T10:43:26.458991Z"
+   committed-date="2012-03-23T09:43:22.357783Z"
+   checksum="ac05d9d6c85145292808c19925b45cee"
+   last-author="hanliujie"
+   kind="file"
+   prop-time="2012-03-26T10:43:25.475164Z"/>
+<entry
+   committed-rev="11651"
+   name="ClientRssNewsController.java"
+   text-time="2012-03-23T02:26:18.288019Z"
+   committed-date="2011-11-25T07:12:48.992067Z"
+   checksum="c278e1b27fc9d847ac0f9bb5db8c2dca"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.038141Z"/>
+<entry
+   committed-rev="15781"
+   name="ClientChannelNewsController.java"
+   text-time="2012-03-30T03:26:06.881743Z"
+   committed-date="2012-03-29T03:51:09.922236Z"
+   checksum="73a58c61bd688de93cc267a510940d7b"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-30T03:26:06.694245Z"/>
+<entry
+   committed-rev="15613"
+   name="ClientPaperController.java"
+   text-time="2012-03-26T10:43:25.771874Z"
+   committed-date="2012-03-26T10:15:32.465181Z"
+   checksum="06001b1466e3482b604c42966c6927f1"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-26T10:43:25.084757Z"/>
+<entry
+   committed-rev="15672"
+   name="ClientAPIServlet.java"
+   text-time="2012-04-10T02:05:14.093321Z"
+   committed-date="2012-03-27T08:24:05.439146Z"
+   checksum="673fd199a88db717fb483329b401dfce"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-27T06:27:43.454563Z"/>
+<entry
+   committed-rev="12436"
+   name="ClientStaticticsServlet.java"
+   text-time="2012-03-23T02:26:18.319254Z"
+   committed-date="2011-12-19T08:33:57.506970Z"
+   checksum="1b20e356961b60de304330adb91c82de"
+   last-author="hanliujie"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.084993Z"/>
+<entry
+   committed-rev="15663"
+   name="ClientNewsController.java"
+   text-time="2012-03-27T06:27:43.968897Z"
+   committed-date="2012-03-27T06:24:58.067198Z"
+   checksum="9a4048888beada8150c873efc0bcc983"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-27T06:27:43.532492Z"/>
+<entry
+   committed-rev="15376"
+   name="BaseServlet.java"
+   text-time="2012-03-23T02:26:18.350489Z"
+   committed-date="2012-03-22T02:33:54.935789Z"
+   checksum="121a52f7ccdaa716b648a16370d7e1fb"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.100610Z"/>
+<entry
+   committed-rev="13147"
+   name="ScoreController.java"
+   text-time="2012-03-23T02:26:18.350489Z"
+   committed-date="2012-01-07T06:54:38.154669Z"
+   checksum="cdb0a3ee3697fc577580f2a585223ab5"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.116228Z"/>
+<entry
+   committed-rev="15934"
+   name="ClientCheckServlet.java"
+   text-time="2012-03-30T09:19:03.132178Z"
+   committed-date="2012-03-30T12:16:01.913739Z"
+   checksum="282e641a919fa0fae40987be098606c8"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.116228Z"
+   revision="15934"/>
+<entry
+   committed-rev="15661"
+   name="ClientUserController.java"
+   text-time="2012-03-27T06:27:44.046827Z"
+   committed-date="2012-03-27T06:12:55.160067Z"
+   checksum="23d41badc09e61192ad8a92a8f18b0ab"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-27T06:27:43.594836Z"/>
+<entry
+   committed-rev="11154"
+   name="ClientPushController.java"
+   text-time="2012-03-23T02:26:18.381724Z"
+   committed-date="2011-11-01T06:29:43.758740Z"
+   checksum="a359f2ed526d7ea560b40082168554b0"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.131845Z"/>
+<entry
+   committed-rev="15470"
+   name="ClientController.java"
+   text-time="2012-04-10T02:05:15.103785Z"
+   committed-date="2012-03-23T06:22:33.802582Z"
+   checksum="d1624c13c3e0c42fcc2e2e6e937c6118"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.131845Z"/>
+<entry
+   committed-rev="15678"
+   name="ClientSubscribeController.java"
+   text-time="2012-03-27T10:13:25.821750Z"
+   committed-date="2012-03-27T09:25:09.907050Z"
+   checksum="5f68126079bed39c1736c641cfcc3dcf"
+   last-author="wangjia"
+   kind="file"
+   prop-time="2012-03-27T10:13:25.680283Z"/>
+<entry
+   committed-rev="14031"
+   name="MyKaptchaServlet.java"
+   text-time="2012-03-23T02:26:18.412958Z"
+   committed-date="2012-02-15T06:37:22.505863Z"
+   checksum="2169a8185f5f0581a9368ccc49ba3be1"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.147463Z"/>
+<entry
+   committed-rev="14007"
+   name="AdController.java"
+   text-time="2012-03-23T02:26:18.412958Z"
+   committed-date="2012-02-14T12:45:13.613832Z"
+   checksum="e71d5367ed09c4d8d877edb7055d1df0"
+   last-author="jiangtao"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.163080Z"/>
+<entry
+   committed-rev="12436"
+   name="ClientUpgradeServlet.java"
+   text-time="2012-03-23T02:26:18.412958Z"
+   committed-date="2011-12-19T08:33:57.506970Z"
+   checksum="0ad06b939fa71a1237a42200138f1054"
+   last-author="hanliujie"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.163080Z"/>
+<entry
+   committed-rev="15803"
+   name="ClientPhotoController.java"
+   text-time="2012-04-10T02:05:16.098703Z"
+   committed-date="2012-03-29T08:02:35.659937Z"
+   checksum="53ae1e4bb0125dbe4ca73c1588eef9d4"
+   last-author="zhujianbo"
+   kind="file"
+   prop-time="2012-03-30T03:26:06.741119Z"/>
+<entry
+   committed-rev="14462"
+   name="UserSetController.java"
+   text-time="2012-03-23T02:26:18.444193Z"
+   committed-date="2012-03-02T03:55:51.982311Z"
+   checksum="8451f0dad4ae8bd421fde49a5934a1d8"
+   last-author="huoruikun"
+   kind="file"
+   prop-time="2012-03-23T02:26:18.194315Z"/>
+</wc-entries>

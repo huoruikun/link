@@ -1,0 +1,271 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.ShortMsg;
+import com.wap.sohu.mobilepaper.service.IPublicationService;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.HeaderDataUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+import com.wap.sohu.mobilepaper.util.ParseUtil;
+import com.wap.sohu.mobilepaper.util.Tools;
+
+public class ClientCheckServlet extends BaseServlet {
+
+	private static final long serialVersionUID = 7923419512068992341L;
+
+	public final static int ERROR_MINUTE = 59;
+	
+	private IPublicationService publicationService;
+
+	@Override
+	public void init() throws ServletException {
+		super.init();
+		publicationService = (IPublicationService) wc.getBean("publicationService");
+	}
+
+	public void doGet(HttpServletRequest request, HttpServletResponse response) {
+		setCommon(request, response);
+		String result = "0";
+		String messageClass = Tools.getReq(request, "t", "");
+		String productList = Tools.getReq(request, "pl", "1"); // 不传默认给 早晚报的
+		String cid = Tools.getReq(request, "b", "");
+		String deltermid = request.getParameter("deltermid");
+		int nopush = Tools.getReqInt(request, "nopush", 0);
+		String ip = HttpUtil.getIpAddr(request);
+
+		ArrayList<Long> had = new ArrayList<Long>();
+		ArrayList<String> hadMsg = new ArrayList<String>();
+		List<Integer> hadDelTermIdList = ParseUtil.parseIntList(deltermid, ",");
+		StringBuffer sb = new StringBuffer();
+		ClientUser clientUser = null;
+		List<Integer> userSubscribes = null;
+		
+		PaperUtil.alreadyGetTermIdsNew(messageClass, ",", had, hadMsg);
+		if (StringUtils.isNotEmpty(cid)) {
+			clientUser = clientService.getClientUser(Long.parseLong(cid));
+		}
+
+		// 短信的处理（额外功能，不影响主流程）
+		if (clientUser != null) {
+			List<ShortMsg> shortMsgList = getMsg(clientUser, productList, hadMsg);
+			if (shortMsgList != null && shortMsgList.size() > 0) {
+				this.addMsg(request, response, clientUser, productList, shortMsgList, ip);
+				return;
+			}
+		}
+
+		// 常规的报纸处理
+		try {
+			PrintWriter out = response.getWriter();
+			
+			if (clientUser != null) {
+				List<Integer> productIdList = ParseUtil.parseIntList(productList, ",");
+				List<Integer> subIdList = clientService.getUserSubIdList(clientUser, 
+						productIdList, SysConfig.PUB_LIST_TYPE_PUSH);
+				userSubscribes = clientService.getUserPubs(clientUser, productList,
+						SysConfig.PUB_LIST_TYPE_PUSH);
+				
+				boolean isHas = hasNewTerm(clientUser, userSubscribes, had);
+				result = isHas ? "1" : result;
+
+				int minutes = clientService.getNextTime(subIdList, isHas);
+				
+				result = result + "," + minutes;
+				result = this.filterPhone(clientUser, productList, result, messageClass);
+				
+			} else {
+				result = result + "," + ERROR_MINUTE;
+			}
+
+			String logData = HeaderDataUtil.toProtocalString(clientUser, productList);
+			response.setHeader("PL", "MPAPER_API:" + ip + ":" + logData);
+			
+			// 针对nopush（停止接收所有push）的用户进行处理
+			if(nopush == 1 && result.contains("1,")) {
+				result = result.replace("1,", "0,");
+			}
+
+			byte[] data = result.getBytes("utf-8");
+			response.setContentLength(data.length);
+			addDeleteCacheTermInfo(response, hadDelTermIdList);
+			out.print(result);
+			
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+
+		LogWriter.log(ip + "\t" + DateUtil.getDate("") + "\t" + request.getQueryString() + "\t" + result + "\t"
+				+ sb.toString() + "\t" + productList);
+
+		return;
+	}
+
+	@Override
+	public void doPost(HttpServletRequest request, HttpServletResponse response) {
+		doGet(request, response);
+	}
+	
+	private String filterPhone(ClientUser clientUser, String productList, String result, String messageClass) {
+		
+		if (ClientUtil.isTestPhone(clientUser.getIMEI()) && clientUser.getCid() > 0) { // 测试手机从测试服务器取信息
+			String resu = ClientUtil.getCheckTestPub(clientUser, result, messageClass);
+			if (StringUtils.isNotEmpty(resu))
+				result = resu;
+		}
+		
+		//add by wangjia
+		if (clientUser.getPlatform() != null
+				&& clientUser.getPlatform().contains("ymbian")) {
+			int productId = NumberUtils.toInt(productList, 1);
+			ClientInstall clientInstall = clientUser
+					.getUserInstallProducIdChannelIdMap().get(productId);
+			if (clientInstall != null
+					&& "2.00".equalsIgnoreCase(clientInstall.getVersion())) {
+				result = "0,122";
+			}
+		}
+		 
+		 return result;
+	}
+	
+	private boolean hasNewTerm(ClientUser clientUser, List<Integer> userSubscribes, ArrayList<Long> had) {
+		List<PublicationTerm> terms = clientService.getTermDataNewForList(clientUser, userSubscribes, true);
+		
+		boolean isHas = false;
+		if (terms.size() > 0) {
+			for (PublicationTerm term : terms) {
+				if (!PaperUtil.hasGetNew(term.getId(), had)) { // 没有取过
+					isHas = true;
+					break;
+				}
+			}
+		}
+		
+		return isHas;
+	}
+	
+	// 添加“短信”内容
+	private void addMsg(HttpServletRequest request, HttpServletResponse response, 
+		ClientUser clientUser, String productList, List<ShortMsg> shortMsgList, String ip) {
+	
+		StringBuilder outMessage = new StringBuilder();
+		outMessage.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><root>");
+		for (ShortMsg shortMsg : shortMsgList) {
+			outMessage.append("<msg>");
+			outMessage.append("<type>" + shortMsg.getType() + "</type>");
+			outMessage.append("<msgId>msg" + shortMsg.getId() + "</msgId>");
+			outMessage.append("<senderName>" + shortMsg.getSenderName() + "</senderName>");
+			outMessage.append("<title>" + shortMsg.getTitle() + "</title>");
+			outMessage.append("<content>" + shortMsg.getContent() + "</content>");
+			outMessage.append("</msg>");
+		}
+		outMessage.append("</root>");
+
+		// 开始发送
+		try {
+			PrintWriter out = response.getWriter();
+			String logData = HeaderDataUtil.toProtocalString(clientUser, productList);
+			response.setHeader("PL", "MPAPER_API:" + ip + ":" + logData);
+
+			byte[] data = outMessage.toString().getBytes("utf-8");
+			response.setContentLength(data.length);
+			out.print(outMessage);
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+		LogWriter.log(ip + "\t" + DateUtil.getDate("") + "\t" + request.getQueryString() + "\t0\t\t" + productList);
+		// LogWriter.log(ip + "\t" + DateUtil.getDate("") + "\t" +
+		// request.getQueryString() + "\t" + result + "\t"
+		// + sb.toString() + "\t" + productList);
+		
+	}
+	 
+	// 处理需要删除的本地报纸
+	private void addDeleteCacheTermInfo(HttpServletResponse response,
+			List<Integer> hadDelTermIdList) {
+		try{
+			Map<String, String> delLocalCacheTermInfoMap = publicationService
+					.getDeleteLocalCacheTermInfo(hadDelTermIdList);
+			if (delLocalCacheTermInfoMap != null) {
+				String delTermIds = delLocalCacheTermInfoMap.get("delTermIds");
+				String delNewsKeys = delLocalCacheTermInfoMap.get("delNewsIds");
+				if (StringUtils.isNotBlank(delTermIds)) {
+					response.setHeader("delTermId", delTermIds);
+				}
+				if (StringUtils.isNotBlank(delNewsKeys)) {
+					response.setHeader("delNewsKey", delNewsKeys);
+				}
+			}
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+		
+	}
+	
+	private List<ShortMsg> getMsg(ClientUser clientUser, String products, ArrayList<String> hadMsg) {
+
+		// to do 具体的取短信操作 和 判断过滤条件的操作
+		List<ShortMsg> res = clientService.listShortMessage(products);
+		List<ShortMsg> result = null;
+		if (res != null && res.size() > 0) {
+			result = new ArrayList<ShortMsg>();
+			for (ShortMsg shortMsg : res) {
+				try {
+					ClientInstall clientInstall = clientUser.getUserInstallProducIdChannelIdMap().get(
+							shortMsg.getProductId());
+					String version = clientInstall.getVersion();
+
+					if ("".equals(version.trim())) {
+						continue;
+					}
+
+					String[] varArr = version.split("\\.");
+
+					int varsionBig = Integer.parseInt(varArr[0]);
+					int varsionSmall = 0;
+					if (varArr.length > 1) {
+						varsionSmall = Integer.parseInt(varArr[1]);
+					}
+
+					double n = Math.pow(10, (varsionSmall + "").length());
+					if ((varsionBig + varsionSmall / n) < 1.95) { // 1.95以前的版本
+																	// 不发送
+						continue;
+					}
+
+				} catch (Exception e) {
+					e.printStackTrace();
+					continue;
+				}
+				if (hadMsg != null && hadMsg.size() > 0) {
+					if (!hadMsg.contains(("msg" + shortMsg.getId()))) {
+						result.add(shortMsg);
+					}
+				} else {
+					result.add(shortMsg);
+				}
+
+			}
+		}
+		return result;
+	}
+
+}

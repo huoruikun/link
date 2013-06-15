@@ -1,0 +1,101 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-8-27 下午01:57:03
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.util;
+
+/**
+ * @author alex.lee at 2010-8-27 下午01:57:03
+ * 
+ *         desc：手机定位
+ */
+public class Location {
+
+	// 纬度
+	public String latitude;
+	// 经度
+	public String longitude;
+	// 精确度
+	public String accuracy;
+	// 国家
+	public String country;
+	// 国家代码
+	public String country_code;
+	// 省、州
+	public String region;
+	// 市、行政区
+	public String city;
+	// 街道
+	public String street;
+
+	public String getLatitude() {
+		return latitude;
+	}
+
+	public void setLatitude(String latitude) {
+		this.latitude = latitude;
+	}
+
+	public String getLongitude() {
+		return longitude;
+	}
+
+	public void setLongitude(String longitude) {
+		this.longitude = longitude;
+	}
+
+	public String getAccuracy() {
+		return accuracy;
+	}
+
+	public void setAccuracy(String accuracy) {
+		this.accuracy = accuracy;
+	}
+
+	public String getCountry() {
+		return country;
+	}
+
+	public void setCountry(String country) {
+		this.country = country;
+	}
+
+	public String getCountry_code() {
+		return country_code;
+	}
+
+	public void setCountry_code(String country_code) {
+		this.country_code = country_code;
+	}
+
+	public String getRegion() {
+		return region;
+	}
+
+	public void setRegion(String region) {
+		this.region = region;
+	}
+
+	public String getCity() {
+		return city;
+	}
+
+	public void setCity(String city) {
+		this.city = city;
+	}
+
+	public String getStreet() {
+		return street;
+	}
+
+	public void setStreet(String street) {
+		this.street = street;
+	}
+
+}

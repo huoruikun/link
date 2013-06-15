@@ -1,0 +1,12 @@
+package com.wap.sohu.mobilepaper.util;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+
+public class ImageUtils {
+
+	private static Logger logger = Logger.getLogger(ImageUtils.class);
+
+}

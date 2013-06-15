@@ -1,0 +1,96 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Date;
+import java.util.List;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.UserScoreHistory;
+
+@Repository("userScoreHistoryDao")
+public class UserScoreHistoryDao extends BaseJdbcSupport {
+	
+	private SimpleJdbcInsert insertActor = null;
+	
+	@PostConstruct
+	public void init(){
+		insertActor = new SimpleJdbcInsert(
+				getInterfaceJdbcTemplate().getDataSource()).withTableName("c_user_score_history")
+				.usingGeneratedKeyColumns("id");
+	}
+
+	public void add(UserScoreHistory ush) {
+		SqlParameterSource parameters = new BeanPropertySqlParameterSource(ush);
+		insertActor.execute(parameters);
+	}
+	
+	public boolean audit(long id, int status) {
+		String sql = "update c_user_score_history set status = ? where id = ?";
+		this.getInterfaceJdbcTemplate().update(sql, status, id);
+		return true;
+	}
+	
+	/**
+	 * 查询某种类型，从某个日期到现在的排行
+	 * 	改为滚动显示，显示最新的几条即可
+	 * @param type
+	 * @param startDate
+	 * @return
+	 */
+	public List<UserScoreHistory> topList(int type, Date startDate) {
+		String sql = "select * from c_user_score_history where type=? and date>? and status=1 order by id desc limit 5;";
+		return getInterfaceJdbcTemplate().query(sql, new Object[]{type, startDate}, new dataMapper());
+	}
+	
+	/**
+	 * 列出某个人的没有完成的邀请人加分
+	 * @return
+	 */
+	public UserScoreHistory notAuditInviteAward(long cid) {
+		String sql = "select * from c_user_score_history where fcid=? and status=0 type=" + UserScoreHistory.TYPE_OF_INVITE;
+		List<UserScoreHistory> list = getInterfaceJdbcTemplate().query(sql, new Object[]{cid}, new dataMapper());
+		if(list != null && list.size() > 0) {
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	/**
+	 * 查询用户的历史
+	 * @param cid
+	 * @param type
+	 * @param num
+	 * @return
+	 */
+//	public List<UserScoreHistory> userHistory(long cid, int type, int num) {
+//		String sql = "select * from c_user_score_history ";
+//		return null;
+//	}
+	
+	class dataMapper implements RowMapper<UserScoreHistory> {
+
+		@Override
+		public UserScoreHistory mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			UserScoreHistory ush = new UserScoreHistory();
+			ush.setId(rs.getLong("id"));
+			ush.setCid(rs.getLong("cid"));
+			ush.setType(rs.getInt("type"));
+			ush.setNum(rs.getInt("num"));
+			ush.setFcid(rs.getLong("fcid"));
+			ush.setGiftId(rs.getInt("giftId"));
+			ush.setStatus(rs.getInt("status"));
+			ush.setDate(rs.getDate("date"));
+			return ush;
+		}
+		
+	}
+}

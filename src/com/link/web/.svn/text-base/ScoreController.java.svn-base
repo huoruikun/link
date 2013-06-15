@@ -1,0 +1,233 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.util.Enumeration;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.model.Gift;
+import com.wap.sohu.mobilepaper.model.UserRegist;
+import com.wap.sohu.mobilepaper.service.IScoreService;
+import com.wap.sohu.mobilepaper.service.ScoreServiceImpl;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.PageUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ScoreController {
+
+	@Autowired
+	private IScoreService scoreService; 
+	
+	@RequestMapping(value = "/score.go", params = "m=home")
+	public String homeNoRet(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:mpnws_score.go?"+sb.toString();
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=home")
+	public String home(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		UserRegist ur = scoreService.getUserRegist(cid);
+		List<String> feed1 = scoreService.monthScoreRanking();
+		List<String> feed2 = scoreService.monthExchangeRanking();
+		
+		model.addAttribute("UserRegist", ur);
+		model.addAttribute("MonthScoreRanking", feed1);
+		model.addAttribute("MonthExchangeRanking", feed2);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/home";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=regist")
+	public String regist(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		
+		UserRegist ur = new UserRegist();
+		ur.setCid(ClientUtil.getCidFromRequest(request));
+		ur.setName(request.getParameter("name"));
+		ur.setPhone(request.getParameter("phone"));
+		ur.setRegCode(request.getParameter("regCode"));
+		
+		int code = scoreService.regist(ur);
+		
+		if(code != ScoreServiceImpl.SUCC) {
+			int type = ParseUtil.paseInt(request.getParameter("t"), 0);
+			return registPage(model, type, code, request);
+		}
+		
+		model.addAttribute("UserRegist", scoreService.getUserRegist(ur.getCid()));
+		model.addAttribute("Code", code);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/regist";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=giftDetail")
+	public String giftDetail(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int giftCode = ParseUtil.paseInt(request.getParameter("giftCode"), 0);
+		
+		UserRegist ur = scoreService.getUserRegist(cid);
+		Gift gift = scoreService.findGift(giftCode, false);
+		
+		model.addAttribute("UserRegist", ur);
+		model.addAttribute("Gift", gift);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/giftDetail";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=exchange")
+	public String exchange(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		
+		long cid = ClientUtil.getCidFromRequest(request);
+		UserRegist ur = scoreService.getUserRegist(cid);
+		int code = scoreService.exchange(request);	
+		
+		model.addAttribute("Code", code);
+		model.addAttribute("UserRegist", ur);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/exchange";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=newUser")
+	public String newUser(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int type = ParseUtil.paseInt(request.getParameter("t"), 0);
+		int code = ParseUtil.paseInt(request.getParameter("c"), 1);
+		//setResponse(response);
+		
+		return registPage(model, type, code, request);
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=friRegList")
+	public String friRegList(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		UserRegist ur = scoreService.getUserRegist(cid);
+		List<UserRegist> list = scoreService.friendRegistHistory(cid);
+		
+		model.addAttribute("UserRegist", ur);
+		model.addAttribute("UserRegistList", list);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/friRegList";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=mall")
+	public String mall(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		UserRegist ur = scoreService.getUserRegist(cid);
+		
+		model.addAttribute("UserRegist", ur);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/mall";
+	}
+	
+	@RequestMapping(value = "/mpnws_score.go", params = "m=help")
+	public String help(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		UserRegist ur = scoreService.getUserRegist(cid);
+		
+		model.addAttribute("UserRegist", ur);
+		urlTails(model, request);
+		//setResponse(response);
+		
+		return "score/help";
+	}
+	
+	/**
+	 * 下载安装包
+	 * @param model
+	 * @param request
+	 * @param response
+	 */
+	@RequestMapping(value = "/score.go", params = "m=download")
+	public String download(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String str = request.getParameter("i");
+		int platformId = ParseUtil.paseInt(request.getParameter("p"), 0);
+		int channelId = ParseUtil.paseInt(request.getParameter("c"), 0);
+		
+		//奖励邀请人
+		UserRegist ur = scoreService.findUserRegistByRegCode(str);
+		String ua = request.getHeader("user-agent");
+		
+		if(ua != null && ur != null) {
+			long cid = ur.getCid();
+			ua = ua.toLowerCase();
+			if(cid > 0 && (ua.contains("symbian") || ua.contains("android") || ua.contains("iphone") || ua.contains("ios"))) {
+				scoreService.awardInvite(cid);
+			}
+		}
+		
+		//跳转到下载地址
+		String url = scoreService.getPackageUrl(platformId, channelId);
+		
+		return "redirect:" + url;
+	}
+	
+	/**
+	 * 确认邀请奖励，调试用
+	 * @param model
+	 * @param request
+	 * @param response
+	 */
+	@RequestMapping(value = "/score.go", params = "m=awardInvite")
+	public void awardInvite(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		scoreService.awardInvite(cid);
+		RenderUtil.renderHtml(response, "ok");
+	}
+	
+	private String registPage(ModelMap model, int type, int code, HttpServletRequest request) {
+		
+		model.addAttribute("Code", code);
+		urlTails(model, request);
+		
+		if(type == 1) {
+			return "score/be_user";
+		}
+		return "score/new_user";
+	}
+	
+	private void urlTails(ModelMap model, HttpServletRequest request){
+		//model.addAttribute("P1", request.getParameter("p1"));
+		//model.addAttribute("Rdm", System.currentTimeMillis());
+	    model.addAttribute("clientUser", request.getAttribute("clientUser"));
+	}
+	
+	private void setResponse(HttpServletResponse response) {
+		response.setHeader( "Pragma", "no-cache" ); 
+	    response.addHeader( "Cache-Control", "must-revalidate" ); 
+	    response.addHeader( "Cache-Control", "no-cache" ); 
+	    response.addHeader( "Cache-Control", "no-store" ); 
+	    response.setDateHeader("Expires", 0);
+	}
+	
+	public static void main(String[] args) {
+		//System.out.println(urlRandom());
+		System.out.println(PageUtil.getInstance().encode("232074"));
+	}
+}

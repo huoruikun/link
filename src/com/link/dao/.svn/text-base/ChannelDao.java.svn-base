@@ -1,0 +1,35 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.Area;
+import com.wap.sohu.mobilepaper.model.Channel;
+
+@Repository("channelDao")
+public class ChannelDao extends BaseJdbcSupport {
+
+	public List<Channel> listChannel() {
+		return getJdbcTemplate().query("select * from p_channel where is_delete =0 ", new dataMapper());
+	}
+
+	public Channel getChannel(int channelId) {
+		return getJdbcTemplate().queryForObject("select * from p_channel where id= "+channelId, new dataMapper());
+	}
+
+	private static final class dataMapper implements RowMapper<Channel> {
+		public Channel mapRow(ResultSet rs, int rowNum) throws SQLException {
+			Channel area = new Channel();
+			area.setId(rs.getInt("id"));
+			area.setName(rs.getString("name"));
+			area.setIsDelete(rs.getInt("is_delete"));
+			area.setPosition(rs.getInt("position"));
+			area.setIcon(rs.getString("icon"));
+			return area;
+		}
+	}
+}

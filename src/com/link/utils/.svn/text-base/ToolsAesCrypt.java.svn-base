@@ -1,0 +1,247 @@
+package com.wap.sohu.mobilepaper.util;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+ 
+/**
+ * @author sunhaijun
+ * @version 1.2
+ *          Email: haijunsun@sohu-inc.com
+ * @todo <添加类描述>
+ * <p>Title:   </p>
+ * <p>Description:   </p>
+ * <p>Copyright:   Copyright   (c)   2008</p>
+ * <p>Company:  SOHU </p>
+ */
+
+public class ToolsAesCrypt {
+    /**
+     * @param sSrc
+     * @param sKey
+     * @return
+     * @throws Exception
+     * @System Windows
+     * @Function <p>Title: 解密算法  </p>
+     * <p>Description:   </p>
+     * @author sunhaijun
+     * @version
+     * @Create Create on 2008-12-29 下午04:12:58
+     */
+    public static String Decrypt(String sSrc, String sKey)   {
+        try {
+//            //判断Key是否正确
+//            if (sKey == null) {
+//                System.out.print("Key为空null");
+//                return null;
+//            }
+//            //判断Key是否为16位
+//            if (sKey.length() != 16) {
+//                System.out.print("Key长度不是16位");
+//                return null;
+//            }
+            byte[] raw = sKey.getBytes("GBK");
+            SecretKeySpec skeySpec = new SecretKeySpec(raw, "AES");
+            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, skeySpec);
+            byte[] encrypted1 = hex2byte(sSrc.getBytes());
+            try {
+                byte[] original = cipher.doFinal(encrypted1);
+                String originalString = new String(original);
+                originalString = new String(originalString.getBytes(), "UTF-8");
+//                System.out.println("aaa:"+originalString);
+                return originalString;
+            } catch (Exception e) {
+                return null;
+            }
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    /**
+     * @param sSrc
+     * @param sKey
+     * @return
+     * @throws Exception
+     * @System Windows
+     * @Function <p>Title: 解密算法  </p>
+     * <p>Description:   </p>
+     * @author sunhaijun
+     * @version
+     * @Create Create on 2008-12-29 下午04:14:01
+     */
+    public static String Encrypt(String sSrc, String sKey) throws Exception {
+//      if (sKey == null) {
+//          System.out.print("Key为空null");
+//          return null;
+//      }
+//      //判断Key是否为16位
+//      if (sKey.length() != 16) {
+//          System.out.print("Key长度不是16位");
+//          return null;
+//      }
+        byte[] raw = sKey.getBytes("GBK");
+        SecretKeySpec skeySpec = new SecretKeySpec(raw, "AES");
+        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, skeySpec);
+
+        byte[] encrypted = cipher.doFinal(sSrc.getBytes());
+        return byte2hex(encrypted).toLowerCase();
+    }
+
+    
+    
+    public static String EncryptWp(String sSrc, String sKey) throws Exception { 
+    	byte[] raw = sKey.getBytes("GBK");
+        SecretKeySpec skeySpec = new SecretKeySpec(raw, "AES");
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, skeySpec);
+
+        byte[] encrypted = cipher.doFinal(sSrc.getBytes());
+        return byte2hex(encrypted).toLowerCase();
+    }
+    /**
+     * @param 
+     * @return
+     * @System Windows
+     * @Function <p>Title: 十六进制转化成byte数组  </p>
+     * <p>Description:   </p>
+     * @author sunhaijun
+     * @version
+     * @Create Create on 2008-12-29 下午04:14:54
+     */
+    public static byte[] hex2byte(byte[] b) {
+        if ((b.length % 2) != 0)
+            throw new IllegalArgumentException("长度不是偶数");
+        byte[] b2 = new byte[b.length / 2];
+        for (int n = 0; n < b.length; n += 2) {
+            String item = new String(b, n, 2);
+            b2[n / 2] = (byte) Integer.parseInt(item, 16);
+        }
+        return b2;
+    }
+
+    /**
+     * @param b
+     * @return
+     * @System Windows
+     * @Function <p>Title: byte数组转化十六进制  </p>
+     * <p>Description:   </p>
+     * @author sunhaijun
+     * @version
+     * @Create Create on 2008-12-29 下午04:15:58
+     */
+    public static String byte2hex(byte[] b) {
+        String hs = "";
+        String stmp = "";
+        for (int n = 0; n < b.length; n++) {
+            stmp = (java.lang.Integer.toHexString(b[n] & 0XFF));
+            if (stmp.length() == 1) {
+                hs = hs + "0" + stmp;
+            } else {
+                hs = hs + stmp;
+            }
+        }
+        return hs.toUpperCase();
+    }
+
+    /**
+     * @param args
+     * @throws Exception
+     * @System Windows
+     * @Function <p>Title:   </p>
+     * <p>Description:   </p>
+     * @author sunhaijun
+     * @version
+     * @Create Create on 2008-12-29 下午04:12:25
+     */
+    public static void main(String[] args) throws Exception {
+    	
+   /* 	String str = "a=4&b=8718989&c=a000002e74a9bb&d=4&e=&f=Android&g=2.3.3&h=320x480&i=C8650&j=2054&m=null&q=null&r=0&s=&t=1";
+    	String enString = ToolsAesCrypt.EncryptWp(str, "2D2AE7C87C712EB5");
+    	
+        //String enString = ToolsAesCrypt.Encrypt("a=4&b=100000050&c=004402135175671&e=1.5&f=Symbian&g=S60_V3&h=320x480&i=536956368", "2D2AE7C87C712EB5");
+
+        System.out.println("加密后的字串是EncryptWp：" + enString);*/
+        
+        /*
+                        加密用的Key
+                        可以用26个字母和数字组成，最好不要用保留字符，虽然不会错，至于怎么裁决，个人看情况而定
+        */
+//        String cKey = Tools.getRandString(16);
+//        System.out.println(cKey);
+        //System.out.println("MD5: " +Tools.MD5Encode(cKey));
+        //需要加密的字串
+        //加密
+    	/**
+    	 * 公司测试机ime号:
+    	 *  
+    	 * 
+    	 * 
+    	 * 
+    	 *  a=4&b=100000050&c=004402135175671&e=1.5&f=Symbian&g=S60_V3&h=320x480&i=536956368
+    	 *  a=4&b=100000008&c=355302042379140&e=1.5&f=Android&g=2.0.1&h=320x480&i=536956368
+    	 * a=2&b=0&c=354635031366235&e=1.5&f=Android&g=2.0.1&h=320x480&i=536956368
+    	 * a=2&b=0&c=123456789012345&e=1.5&f=Symbian&g=S60_V3&h=320x480&i=536956368
+    	 * a=2&b=0&c=123456789012341&e=1.1&f=PPC&g=WM6.1&h=320x480
+    	 * a=2&b=0&c=12035199604101&d=460001623113742&e=1.50&f=Symbian&g=S60_V3&h=240x320&i=536956364&o=201008091618 
+    	 * a=2&b=15&c=354181031111735&d=460001368026120&e=1.50&f=Symbian&g=S60_V5&h=360x640&i=536956381&j=1000&o=201008091618 
+    	 * a=2&b=0&c=123456789012345&e=2.0&f=iPhone&g=OS4.5&h=320x480&i=536956368
+    	 * a=4&b=100000010&c=864046001936705&e=1.5&f=Android&g=2.0.1&h=320x480&i=536956368
+    	 * a=4&b=&c=864046001936705EEEEEEEE&e=1.5&f=iPhone&g=OS4.5&h=640x480&i=536956368&p=11111111 ca256ad3 0f8404db 48b78893 efd31256 d97f6a6a 50779683 f6d94d1e
+    	 * 
+    	 * a=3&b=&c=86404600193670512312123&e=1.95&f=Android&g=2.0.1&h=320x480&i=536956368&u=8
+    	 * a=3&b=&c=352666046728665&e=1.95&f=Android&g=2.0.1&h=320x480&i=536956368&u=1
+    	 * 
+    	 */																	
+
+        //String enString = ToolsAesCrypt.Encrypt("a=2&b=012448003937148&e=1.95", "2D2AE7C87C712EB5");
+
+//        String enString = ToolsAesCrypt.Encrypt("a=3&b=46&c=&e=&f=&g=&h=&i=&u=1", "2D2AE7C87C712EB5");
+       // String enString = ToolsAesCrypt.Encrypt("a=4&b=100000010&c=864046001936705&e=1.5&f=Android&g=2.0.1&h=320x480&i=536956368", "2D2AE7C87C712EB5");
+
+    	 //str = "a=4&b=&c=355302042379140&h=480x800";
+        //str = "a=4&b=0&c=hrktestxxxxx&e=1.95&f=Symbian&g=S60_V3&h=320x480&i=536956368&j=5210&s=1";
+        //enString = ToolsAesCrypt.Encrypt(str, "2D2AE7C87C712EB5");
+
+//    	String str = "a=5&b=0&c=hrk00000003&d=&e=1.95&f=Android&g=2.2&h=400x683&i=GT-P1000&j=1001&k=&l=&m=G39.99796198333333,116.33230615000001&n=&o=1274408934691&p=&u=1&t=-1&v=0";
+    	String str = "a=3&b=0&c=hrk00000003&d=&e=1.95&f=Android&g=2.2&h=400x683&i=GT-P1000&j=1001&k=&l=&m=G39.99796198333333,116.33230615000001&n=&o=1274408934691&p=&u=1&t=-1&v=0";
+
+    	//String str = "a=3&b=5901324&e=2.00";
+    	String enString = ToolsAesCrypt.Encrypt(str, "2D2AE7C87C712EB5");
+
+        //String enString = ToolsAesCrypt.Encrypt("a=4&b=100000050&c=004402135175671&e=1.5&f=Symbian&g=S60_V3&h=320x480&i=536956368", "2D2AE7C87C712EB5");
+    	 
+        System.out.println("加密后的字串是1：" + enString);
+
+    	//String str = "a=4&b=314&e=2.0";
+
+    	 enString = ToolsAesCrypt.Encrypt(str, "2D2AE7C87C712EB5");
+    	
+        //String enString = ToolsAesCrypt.Encrypt("a=4&b=100000050&c=004402135175671&e=1.5&f=Symbian&g=S60_V3&h=320x480&i=536956368", "2D2AE7C87C712EB5");
+
+        System.out.println("加密后的字串是2：" + enString);
+        
+        String deString = ToolsAesCrypt.Decrypt("6bc9ac2fbdda9ecc5892e27ce790be032f6d9e8ad421b86ac8da9680c9379fc2c8df45a5688cede0d29a3d87cde32f3cd158dc184da06dd92539d43ef9c872e6576a7d5de2b729b373299f97458cd520f81227f876b86bb82c7839ee842beea3125d22c72746d5339f59ef15246d4dedd6f2dd50341b6563fd2bbc3ea2b31622ef7d0e884ab9a7d9cba77f47d3705cf5", "2D2AE7C87C712EB5");
+        System.out.println("解密后的字符品是："+deString);
+//        long lUseTime = System.currentTimeMillis() - lStart;
+//        System.out.println("加密耗时：" + lUseTime + "毫秒");
+//        //解密
+//        lStart = System.currentTimeMillis();
+//        
+//        
+//        String[] s_cookieArray = deString.split("&");
+//        ClientUser clientUser = HeaderDataUtil.getUserDataFromProtocolV2(s_cookieArray);
+//        System.out.println(clientUser.getChannelId());
+//        String DeString = ToolsAesCrypt.Decrypt(enString, "2D2AE7C87C712EB5");
+////       String NewString = ToolsAesCrypt.Decrypt("dbfe4f4ef09cd7eb8eb305a0dd414ac0c21aaa9b7e9936f148b0a3b32efdeb3359af51636ee632b865310666b632c115dd845380507539f207005a0e7a8963cd4f5f9db9c6353315e7322b532d766e423b8f439a79e9583a3cd7bbeba3b5e88036f735e042fd49bf63a9a2ef79d45cd84fc198c503810ca2bd063f1be61b4941d0f1a1657b09cab65e0272419d14a", "6E09C97EB8798EEB");
+////       NewString = new String (NewString.getBytes(),"UTF-8");
+////       System.out.println(DeString.split("\\|").length);
+////       System.out.println(NewString.split("\\|").length);
+//        System.out.println("解密后的字串是AAAA：" + DeString);
+//       lUseTime = System.currentTimeMillis() - lStart;
+//       System.out.println("解密耗时：" + lUseTime + "毫秒");
+	}
+}
+

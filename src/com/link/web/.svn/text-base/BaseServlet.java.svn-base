@@ -1,0 +1,81 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.UnsupportedEncodingException;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.support.WebApplicationContextUtils;
+
+import com.wap.sohu.mobilepaper.dao.PubPageSubscribeDao;
+import com.wap.sohu.mobilepaper.dao.PubSubscribeMapDao;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.service.IAreaService;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+
+public abstract class BaseServlet  extends HttpServlet {
+	protected static final long serialVersionUID = -6009062283540811772L;
+	public static String WEB_ROOT_PATH = null;
+	@Autowired
+	protected IClientService clientService;
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+	@Autowired
+	protected INewsService newsService;
+	
+	@Autowired
+	protected IAreaService areaService;
+	@Autowired
+	protected PubSubscribeMapDao pubSubscribeMapDao;
+	
+	@Autowired
+	protected PubPageSubscribeDao pubPageSubscribeDao;
+	
+	WebApplicationContext wc;
+
+	public void init() throws ServletException {
+		super.init();
+		WEB_ROOT_PATH = getServletContext().getRealPath("");
+		wc = WebApplicationContextUtils
+				.getWebApplicationContext(this.getServletContext());
+		clientService = (IClientService) wc.getBean("clientService");
+		
+		newsService = (INewsService) wc.getBean("newsService");
+		
+		subscriptionService = (ISubscriptionService) wc.getBean("subscriptionService");
+		
+		
+		pubSubscribeMapDao = (PubSubscribeMapDao) wc.getBean("pubSubscribeMapDao");
+		
+		
+		pubPageSubscribeDao = (PubPageSubscribeDao) wc.getBean("pubPageSubscribeDao");
+		
+		areaService = (IAreaService) wc.getBean("areaService");
+		
+		
+		
+	}
+	
+	public abstract void doGet(HttpServletRequest request, HttpServletResponse response) ;
+	
+	protected ClientUser getClientUser(HttpServletRequest request,
+			HttpServletResponse response) {
+		ClientUser clientUser = (ClientUser)request.getAttribute("clientUser");
+		return clientUser;
+	}
+	
+	public static void setCommon(HttpServletRequest request, HttpServletResponse response){
+		try {
+			request.setCharacterEncoding("UTF-8");
+		} catch (UnsupportedEncodingException e1) {
+			e1.printStackTrace();
+		}
+		response.addHeader("Content-Type", "text/plain");
+	}
+}

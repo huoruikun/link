@@ -1,0 +1,43 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.UpdateRule;
+
+
+@Repository("updateRuleDao")
+public class UpdateRuleDao extends BaseJdbcSupport {
+	
+	@Override
+    public JdbcTemplate getJdbcTemplate() {
+		return upgradeJdbcTemplate;
+		
+	}
+	
+	public List<UpdateRule> list(int releaseId){
+		//System.out.println("============list(int releaseId) ");
+		return getJdbcTemplate().query(
+				"select * from u_update_rule where releaseId=?", 
+				new Object[]{releaseId},
+				new dataMapper());
+	}
+	
+	private static final class dataMapper implements RowMapper<UpdateRule> {
+		public UpdateRule mapRow(ResultSet rs, int rowNum) throws SQLException {
+			UpdateRule rule = new UpdateRule();
+			rule.setId(rs.getInt("id"));
+			rule.setReleaseId(rs.getInt("releaseId"));
+			rule.setAttribute(rs.getString("attribute"));
+			rule.setExpression(rs.getInt("expression"));
+			rule.setValue(rs.getString("value"));
+			rule.setDate(rs.getDate("date"));			
+			return rule;
+		}
+	}
+}

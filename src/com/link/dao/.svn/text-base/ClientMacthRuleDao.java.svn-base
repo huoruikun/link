@@ -1,0 +1,94 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ClientAdaptInf;
+import com.wap.sohu.mobilepaper.model.ClientMacthRule;
+import com.wap.sohu.mobilepaper.model.PModelSon;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+
+
+@Repository("clientMacthRuleDao")
+public class ClientMacthRuleDao extends BaseJdbcSupport {
+	public List<ClientMacthRule> list() {
+		String SQL_QUERY = "select * from p_client_match order by weight desc";
+		List<ClientMacthRule> list = this.getJdbcTemplate().query(SQL_QUERY,
+				new dataMapper());
+		return list;
+	}
+	
+	public PModelSon findModelSonByPubIdAndInfId(int pubId ,int infId) {
+		String SQL = "select id,adaptInfId,pubID,zipPolicy from p_model_son where pubID = " + pubId +" and adaptInfId="+infId;
+		List<PModelSon> list = this.getJdbcTemplate().query(SQL,new dataMapper2());
+		if (CommonUtils.isNotEmpty(list)) {
+			return  list.get(0);
+		}
+		return null;
+	}
+	
+	public List<PModelSon> findModelSons() {
+		String SQL = "select id,adaptInfId,pubID,zipPolicy from p_model_son where status = '0' ";
+		return this.getJdbcTemplate().query(SQL,new dataMapper2());
+	}
+	
+	public List<ClientAdaptInf> findClientAdaptInfs() {
+		String SQL = "select * from c_adapt_inf ";
+		return this.getJdbcTemplate().query(SQL,new dataMapper3());
+	}
+	
+	public ClientAdaptInf findClientAdaptInf(int id) {
+		String SQL = "select * from c_adapt_inf where id=?";
+		List<ClientAdaptInf> list = getJdbcTemplate().query(SQL, new Object[]{id}, new dataMapper3());
+		if(list != null && list.size() > 0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	
+	private class dataMapper implements RowMapper<ClientMacthRule> {
+		public ClientMacthRule mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientMacthRule rule = new ClientMacthRule();
+			rule.setClientPhoneType(rs.getString("clientPhoneType"));
+			rule.setClientSysName(rs.getString("clientSysName"));
+			rule.setClientSysVersion(rs.getString("clientSysVersion"));
+			rule.setClientResolution(rs.getString("clientResolution"));
+			rule.setModelTypeId(rs.getInt("modelTypeId"));
+			rule.setPubId(rs.getInt("pubId"));
+			return rule;
+		}
+	}
+	
+	
+	private class dataMapper2 implements RowMapper<PModelSon> {
+		public PModelSon mapRow(ResultSet rs, int rowNum) throws SQLException {
+			PModelSon modelSon = new PModelSon();
+			modelSon.setId(rs.getInt("id"));
+			modelSon.setPubID(rs.getInt("pubID"));
+			modelSon.setAdaptInfId(rs.getInt("adaptInfId"));
+			modelSon.setZipPolicy(rs.getInt("zipPolicy"));
+			
+			return modelSon;
+		}
+	}
+	
+	private class dataMapper3 implements RowMapper<ClientAdaptInf> {
+		public ClientAdaptInf mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ClientAdaptInf clientAdaptInf = new ClientAdaptInf();
+			clientAdaptInf.setId(rs.getInt("id"));
+			clientAdaptInf.setName(rs.getString("name"));
+			clientAdaptInf.setDescription(rs.getString("description"));
+			clientAdaptInf.setFontSize(rs.getInt("fontSize"));
+			clientAdaptInf.setPicType(rs.getString("picType"));
+			clientAdaptInf.setScale(rs.getString("scale"));
+			clientAdaptInf.setPicGroupType(rs.getString("picGroupType"));
+			clientAdaptInf.setTplTypeId(rs.getInt("tplTypeId"));
+			return clientAdaptInf;
+		}
+	}
+}

@@ -1,0 +1,1335 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.dao.WeatherDao;
+import com.wap.sohu.mobilepaper.model.Area;
+import com.wap.sohu.mobilepaper.model.ClientCancelPub;
+import com.wap.sohu.mobilepaper.model.ClientSet;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.ProvincePubCityList;
+import com.wap.sohu.mobilepaper.model.PubCity;
+import com.wap.sohu.mobilepaper.model.PubPageSubscribeShowObject;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.PublicationTerm;
+import com.wap.sohu.mobilepaper.model.UserPubCity;
+import com.wap.sohu.mobilepaper.model.Weather;
+import com.wap.sohu.mobilepaper.service.IAreaService;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionService;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+import com.wap.sohu.mobilepaper.util.HeaderDataUtil;
+import com.wap.sohu.mobilepaper.util.PageUtil;
+
+@Controller
+public class UserSetController {
+
+	@Autowired
+	protected IAreaService areaService;
+	
+	@Autowired
+	protected IClientService clientService;
+	
+	@Autowired
+	protected ISubscriptionService subscriptionService;
+	
+	Logger logger = Logger.getLogger(UserSetController.class);
+	
+	@RequestMapping(value="/set.go",params="m=listProvince")
+	public String listProvinceNoRet(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:mpnws_set.go?"+sb.toString();
+	}
+	
+	@RequestMapping(value="/mpnws_set.go",params="m=listProvince")
+	public String listProvince(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int cityCode = ParseUtil.paseInt(request.getParameter("cc"), 0);
+		int step = ParseUtil.paseInt(request.getParameter("step"), 0);
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		String setOk = request.getParameter("setOk");
+		
+		if(StringUtils.isNotEmpty(setOk) && setOk.equals("1")){
+			model.addAttribute("setOk", 1);
+		}else{
+			model.addAttribute("setOk", 0);
+		}
+			
+		
+		String backUrl = request.getParameter("backUrl");
+		List<String> area_list_no_encode = areaService.listAllProvince();
+		List<String[]> area_list = new ArrayList<String[]>();
+		for(String str : area_list_no_encode){
+			try{
+				String[] strs = {str, URLEncoder.encode(str, "UTF-8")};
+				area_list.add(strs);
+			}catch(Exception e){}
+		}
+		
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");//先去到用户信息，如果有用户信息才设置
+		//System.out.println(req_user.getCid()+"   "+req_user.getIMEI());
+		if(cityCode==0&&req_user!=null && req_user.getCid()>0){
+			if(cityCode<=0){
+				if(HeaderDataUtil.getClientSet(request).getArea()>0){
+					cityCode = HeaderDataUtil.getClientSet(request).getArea();
+				}else{
+					cityCode = req_user.getMatchArea();
+				}			
+			}			
+		}
+		
+		if(cityCode==0){
+			cityCode = SysConfig.WEATHER_DEFAULT_CITY;
+		}
+			
+		String cityName = areaService.getCityByCode(cityCode);			
+		Weather today = WeatherDao.getTodayWeaterByCityName(cityName);
+		Weather tomorrow = WeatherDao.getTomorrowWeaterByCityName(cityName);
+		
+		model.addAttribute("Code", SysConfig.USER_NORMAL);
+		model.addAttribute("ProvinceList", area_list);
+		model.addAttribute("Today", today);
+		model.addAttribute("Tomorrow", tomorrow);
+		model.addAttribute("CityName", cityName);
+		model.addAttribute("Step", step);
+		if(backUrl!=null){
+			try {
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				model.addAttribute("BackUrlEncode", URLEncoder.encode(backUrl, "UTF-8"));
+				model.addAttribute("BackUrl", backUrl);
+				if(p1!=null){
+					model.addAttribute("P1", URLEncoder.encode(p1, "UTF-8"));
+				}
+				if(p2!=null){
+					model.addAttribute("P2", URLEncoder.encode(p2, "UTF-8"));
+				}
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+		}	
+		
+		
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId != SysConfig.MODEL_INFO_ID)
+				return "userset/listProvinceTouch";
+		}catch (Exception e) {
+		}
+		return "userset/listProvince";
+	}
+	
+	
+	@RequestMapping(value="/getWeather.go",params="m=g")
+	public String getWeatherOneDay(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int cityCode = ParseUtil.paseInt(request.getParameter("c"), 0);
+		
+		if(cityCode==0){
+			cityCode = SysConfig.WEATHER_DEFAULT_CITY;
+		}
+		StringBuilder sb = new StringBuilder();
+		
+		try{
+			String cityName = areaService.getCityByCode(cityCode);			
+			Weather today = WeatherDao.getTodayWeaterByCityName(cityName);
+			Weather tomorrow = WeatherDao.getTomorrowWeaterByCityName(cityName);
+			
+			String todayIcon = today.getWeather_ico();
+			todayIcon = todayIcon.replace("gif", "png");
+			
+			String tomorrowIcon = tomorrow.getWeather_ico();
+			tomorrowIcon = tomorrowIcon.replace("gif", "png");
+			
+			sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><root>");
+			
+			sb.append("<item>");
+			sb.append("<date>").append(today.getDatefore()).append("</date>");
+			sb.append("<temph>").append(today.getTemp_h()).append("</temph>");
+			sb.append("<templ>").append(today.getTemp_l()).append("</templ>");
+			sb.append("<wind>").append(today.getWind()).append("</wind>");
+			sb.append("<desc>").append(today.getWeather()).append("</desc>");
+			sb.append("<icon>").append(todayIcon).append("</icon>");
+			sb.append("</item>");
+			
+			sb.append("<item>");
+			sb.append("<date>").append(tomorrow.getDatefore()).append("</date>");
+			sb.append("<temph>").append(tomorrow.getTemp_h()).append("</temph>");
+			sb.append("<templ>").append(tomorrow.getTemp_l()).append("</templ>");
+			sb.append("<wind>").append(tomorrow.getWind()).append("</wind>");
+			sb.append("<desc>").append(tomorrow.getWeather()).append("</desc>");
+			sb.append("<icon>").append(tomorrowIcon).append("</icon>");
+			sb.append("</item>");
+			
+			sb.append("</root>");
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+
+		
+		model.addAttribute("txt", sb.toString());
+		
+		return "userset/txt";
+	}
+	
+	@RequestMapping(value="/getZip.go",params="m=g")
+	public String getZip(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String url = request.getParameter("url");
+		String zipUrl = "";
+		try{
+			// url = "http://221.179.173.198/mpaper/1/20110413/1182_46_318_2/mpaperhome_1_1182_1.html";
+			String[] temp = url.split("/");
+			String last = temp[temp.length-1];
+			String secondLast = temp[temp.length-2];
+			String termId = secondLast.split("_")[0];
+			
+			zipUrl = url.substring(0, url.length()-last.length())+termId+".zip";
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+		
+		model.addAttribute("txt", zipUrl);
+		
+		return "userset/txtP";
+	}
+	
+	//搜索城市
+	@RequestMapping(value="/set.go",params="m=searchArea")
+	public String searchArea(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		String cityName = request.getParameter("cityName");
+		String backUrl = request.getParameter("backUrl");
+		if(StringUtils.isNotEmpty(cityName)){
+			Weather today = WeatherDao.getTodayWeaterByCityName(cityName);
+			Weather tomorrow = WeatherDao.getTomorrowWeaterByCityName(cityName);
+			model.addAttribute("Today", today);
+			model.addAttribute("Tomorrow", tomorrow);
+			model.addAttribute("cityName", cityName);
+			int code = areaService.getCodeByName(cityName);
+			model.addAttribute("cityCode",code);
+			
+			String cityName2 = areaService.getCityByCode(code);
+			if(cityName2.equals(cityName)){
+				model.addAttribute("hasCity",1);
+			}else{
+				model.addAttribute("hasCity",0);
+			}
+		}
+		model.addAttribute("BackUrl", backUrl);
+		
+		if(backUrl!=null){
+			try {
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				model.addAttribute("BackUrlEncode", URLEncoder.encode(backUrl, "UTF-8"));
+				model.addAttribute("BackUrl", backUrl);
+				if(p1!=null){
+					model.addAttribute("P1", URLEncoder.encode(p1, "UTF-8"));
+				}
+				if(p2!=null){
+					model.addAttribute("P2", URLEncoder.encode(p2, "UTF-8"));
+				}
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+		}
+		return "userset/searchArea";
+	}
+	
+	@RequestMapping(value="/set.go",params="m=listArea")
+	public String listArea(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String p1 = request.getParameter("p1");
+		String p2 = request.getParameter("p2");
+		String province = request.getParameter("pn");
+		String backUrl = request.getParameter("backUrl");
+		List<Area> area_list = null;
+		if(province!=null){
+			try{
+				province = URLDecoder.decode(province, "UTF-8");
+			}catch(Exception e){}
+			area_list = areaService.getCityByProvince(province);
+		}
+		model.addAttribute("AreaList", area_list);	
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("province", province);
+		if(backUrl!=null){
+			try {
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				model.addAttribute("BackUrlEncode", URLEncoder.encode(backUrl, "UTF-8"));
+				model.addAttribute("BackUrl", backUrl);
+				if(p1!=null){
+					model.addAttribute("P1", URLEncoder.encode(p1, "UTF-8"));
+				}
+				if(p2!=null){
+					model.addAttribute("P2", URLEncoder.encode(p2, "UTF-8"));
+				}
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		/*如果省份下面只有一个城市，则直接设置*/
+		if(area_list!=null && area_list.size()==1){
+			int areaId = 0;
+			try{
+				areaId = area_list.get(0).getCode();
+				setUserArea(request, areaId);
+				return "redirect:mpnws_set.go?m=listProvince&cc="+areaId+"&backUrl="+backUrl+"&p1="+p1+"&setOk=1";
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId != SysConfig.MODEL_INFO_ID)
+				return "userset/listAreaTouch";
+		}catch (Exception e) {
+		}
+		return "userset/listArea";
+	}
+	
+	@RequestMapping(value="/set.go",params="m=setArea")
+	public String setArea(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int areaId = ParseUtil.paseInt(request.getParameter("area"), 0);
+		String backUrl = request.getParameter("backUrl");
+		
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");		
+		if(req_user!=null && req_user.getCid()>0 && areaId>0){
+			long cid = req_user.getCid();
+			ClientSet set = new ClientSet();
+			set.setArea(areaId);
+			set.setCid(cid);
+			try{
+				set.setZipPolicy(HeaderDataUtil.getClientSet(request).getZipPolicy());
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+			int productId = ParseUtil.paseInt(request.getParameter("u"), 1);
+			productId = (productId==0)?1:productId;
+			set.setProductId(productId);  
+			
+			//LogWriter.log("setArea() cid="+cid+ " area="+areaId+" imei="+req_user.getIMEI());
+			clientService.updateClientSet(cid, set);			
+		}else{
+			//long cid = 0;
+			//if(req_user!=null){
+			//	cid = req_user.getCid();
+			//}
+			//LogWriter.log("setArea() _null cid="+cid+ " area="+areaId+" imei=");
+		}
+		
+		if(backUrl!=null){
+			try {
+				backUrl = URLDecoder.decode(backUrl, "UTF-8");
+				backUrl =  URLEncoder.encode(backUrl, "UTF-8");
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		 String p1 = request.getParameter("p1");
+			String p2 = request.getParameter("p2");
+			try{
+				if(p1!=null){
+					p1 = URLEncoder.encode(p1, "UTF-8");
+				}
+				if(p2!=null){
+					p2 = URLEncoder.encode(p2, "UTF-8");
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		
+		return "redirect:mpnws_set.go?m=listProvince&cc="+areaId+"&backUrl="+backUrl+"&p1="+p1+"&setOk=1";
+	}
+	
+	
+	@RequestMapping(value="/set.go",params="m=font")
+	public String setFont(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		boolean result = true;
+		int font = ParseUtil.paseInt(request.getParameter("font"), 0);
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+//		System.out.println("setFont:"+font+"\t clientUser is null:"+(req_user==null));
+		if(req_user!=null && req_user.getCid()>0 && font>0){
+			long cid = req_user.getCid();
+			ClientSet set = new ClientSet();
+			try{
+				set.setZipPolicy(HeaderDataUtil.getClientSet(request).getZipPolicy());
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			
+			
+			set.setFont(font);
+			set.setCid(req_user.getCid());
+			try{
+				clientService.updateClientSet(cid, set);
+			}catch (Exception e) {
+				 result = false;
+				 e.printStackTrace();
+			}
+		}else{
+			 result = false;
+		}
+		request.setAttribute("result", result);
+		return "userset/font";
+	}
+	
+	
+	@RequestMapping(value="/set.go",params="m=port")
+	public String setPort(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		
+		
+		String port = request.getParameter("p");
+		if(port!=null){
+			SysConfig.selfPort = port;
+		}
+		
+		request.setAttribute("result", true);
+		return "userset/font";
+	}
+	
+	
+	@RequestMapping(value="/set.go",params="m=getWeather")
+	public String getWeather(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int fmt = ParseUtil.paseInt(request.getParameter("v"), 3);
+		model.addAttribute("Result", areaService.getWeather(fmt));
+		model.addAttribute("OutputFormat", fmt);
+		return "userset/weather";
+	}
+	
+	private long getCidByP1(String p1){
+		long cid = 0;
+		if(p1 != null){
+			try{
+				String s_cid = new String(Base64.decodeBase64(URLDecoder.decode(p1, "utf-8").getBytes("utf-8")));
+				if(s_cid != null){
+					cid = ParseUtil.paseLong(s_cid, 0);
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+		}
+		return cid;
+	}
+	
+	// value="/set.go",params="m=isCloseMsgPaper"
+	@RequestMapping(value="/mpnws_set.go",params="m=isCloseMsgPaper")
+	public String isCloseMsgPaper(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			if(paraName != null && paraName.equals("m")){
+				continue;
+			}
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:subscribe/mpnws_subcenter.go?m=list&"+sb.toString();
+		//return "redirect:mpnws_set.go?m=subscribe&"+sb.toString();
+		
+		/*
+		String p1 = request.getParameter("p1");
+		//String p2 = request.getParameter("p2");		
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);//默认产品1：早晚报
+		String isSubmit = request.getParameter("isSubmit");
+		
+		if(p1 == null){
+			p1 = request.getParameter("post_p1");
+		}
+		if(productId <= 0){
+			productId = ParseUtil.paseInt(request.getParameter("post_u"), 0);
+		}
+		
+		productId = ( productId==0 )?1:productId;
+		
+		try{
+			ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+			if(req_user == null){
+				req_user = new ClientUser();
+				req_user.setCid(getCidByP1(p1));
+			}
+			
+			//System.out.println("isSubmit = "+isSubmit+" p1="+p1+" u = "+productId+"submit="+request.getParameter("submit"));
+			if(isSubmit!=null && "1".equals(isSubmit.trim())){
+				
+				//取打开|关闭列表
+				List<Integer> cancel_list = new ArrayList<Integer>();
+				List<Integer> open_list = new ArrayList<Integer>();
+				
+				int i = 1;
+				while(true){
+					int check = ParseUtil.paseInt(request.getParameter("pubId_"+i+"_check"), -1);
+					int pubId = ParseUtil.paseInt(request.getParameter("pubId_"+i), 0);
+					if(pubId > 0){
+						if(check == 1){//开启刊物
+							open_list.add(pubId);
+						}else if(check == 0){//关闭刊物
+							cancel_list.add(pubId);
+						}
+					}else{
+						break;
+					}
+					
+					i++;
+					if(i>200){
+						break;//关闭刊物出现了200个，认为进入了死循环，跳出
+					}
+				}
+				
+				//打开|关闭刊物列表
+				try{
+					//System.out.println("cancel_list"+cancel_list);
+					//System.out.println("open_list"+open_list);
+					clientService.cancelPubs(req_user, productId, cancel_list);
+					clientService.openPubs(req_user, productId, open_list);
+					model.addAttribute("setOk", 1);
+				}catch (Exception e) {
+					 e.printStackTrace();
+				}
+				
+			}
+			
+			List<Integer> cancel_pubs = clientService.getCanceledPubs(req_user, productId);
+			//System.out.println("cancel_pubs = "+cancel_pubs);
+			model.addAttribute("CancelPubMap", list2Map(cancel_pubs));
+			
+			if(p1!=null){
+				try {
+					model.addAttribute("p1", URLEncoder.encode(p1, "UTF-8"));
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			model.addAttribute("u", productId);
+			
+		}catch(Exception e){
+			// e.printStackTrace();
+		}
+		
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			System.out.println("request inf id "+infId);
+			if(infId != SysConfig.MODEL_INFO_ID)
+				return "userset/isCloseMsgPaperTouch";
+		}catch (Exception e) {
+		}
+		return "userset/isCloseMsgPaper";
+		*/
+	}
+	
+	private Map<String, Integer> list2Map(List<Integer> list){
+		Map<String, Integer> map = new HashMap<String, Integer>();
+		if(list != null){
+			for(Integer i : list){
+				map.put(i.toString(), i);
+			}
+		}
+		return map;
+	}
+	
+	
+	
+	private void setUserArea(HttpServletRequest request, int areaId){
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");		
+		if(req_user!=null && req_user.getCid()>0 && areaId>0){
+			long cid = req_user.getCid();
+			ClientSet set = new ClientSet();
+			set.setArea(areaId);
+			set.setCid(cid);
+			try{
+				set.setZipPolicy(HeaderDataUtil.getClientSet(request).getZipPolicy());
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			//LogWriter.log("setArea() cid="+cid+ " area="+areaId+" imei="+req_user.getIMEI());
+			clientService.updateClientSet(cid, set);			
+		}
+	}
+	
+	
+	
+	//用户订阅--------------------------------
+	@RequestMapping(value = "/set.go", params = "m=subscribeOld")
+	public String subscribeOld(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String file = null;//需要配置到父模板中
+		int productId = ParseUtil.paseInt(request.getParameter("p"), 0);
+		int order = ParseUtil.paseInt(request.getParameter("o"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		//long cid = ClientUtil.getCidFromRequest(request);
+		int pageNum = ParseUtil.paseInt(request.getParameter("pn"), 0);//第几页
+		int pageSize = ParseUtil.paseInt(request.getParameter("ps"), 20);//每页的列表数量
+		int effectPub = ParseUtil.paseInt(request.getParameter("ep"), -1);//影响刊物id，如订阅成功，退订
+		String backUrl = request.getParameter("backUrl");
+		
+		if(cid == 0){
+			ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+			if(req_user!=null){
+				cid = req_user.getCid();
+			}
+		}
+		
+		List<Publication> pub_list = clientService.listSubscribePub(productId, order);
+		List<Integer> userSubscribeList = clientService.listSubscribe(cid, 0);
+		
+		//next page, prev page, page count ....
+		int size = pub_list.size();
+		int count = size/pageSize + (size%pageSize>0?1:0);
+		int start_index = pageNum*pageSize;
+		if(start_index<0 || start_index>=size){//[0, size)
+			start_index = 0;
+		}
+		int end_index = start_index+pageSize;
+		if(end_index>size){
+			end_index = size;
+		}
+		
+		pub_list = pub_list.subList(start_index, end_index);
+		
+		
+		model.addAttribute("PubList", pub_list);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Order", order);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("PageNum", pageNum);
+		model.addAttribute("NextPage", pageNum+1);
+		model.addAttribute("PrevPage", pageNum-1);
+		model.addAttribute("Count", count);
+		model.addAttribute("UserSubscribeList", userSubscribeList);
+		model.addAttribute("EffectPub", effectPub);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		model.addAttribute("BackUrl", backUrl);
+		//model.addAttribute("BackUrl", PageUtil.getInstance().decode(backUrl));
+		
+		return "userset/finance";
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=doSubscribe")
+	public String doSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int op = ParseUtil.paseInt(request.getParameter("op"), 0);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);//默认产品1：早晚报
+		int confirm = ParseUtil.paseInt(request.getParameter("confirm"), 0);//用户确认标记
+		String backUrl = request.getParameter("redirectUrl");
+		boolean showAlert = false;
+		
+		if(productId <= 1){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);
+		}		
+		if(cid == 0){
+			ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+			if(req_user!=null){
+				cid = req_user.getCid();
+			}
+		}
+		
+		Publication pub = clientService.getPublication(pubId);
+		
+		if(op == 0){
+			//如果没有用户确认标记 且 不是本产品的刊物，且是其他产品下活跃的，则给出订阅提示
+			if(confirm == 0 && pub != null && pub.getProductId() != productId 
+					&& clientService.isActiveUser(pub.getProductId(), cid, 0)){
+				model.addAttribute("Product", clientService.getProduct(pub.getProductId()));
+				showAlert = true;
+			}else{
+				clientService.addSubscribe(cid, pubId, productId);
+			}
+		}else if(op==1){
+			clientService.delSubscribe(cid, pubId, productId);
+		}
+		model.addAttribute("Op", op);
+		model.addAttribute("P1", request.getParameter("p1"));
+		model.addAttribute("Cid", cid);
+		model.addAttribute("ProductId", productId);//当前产品Id
+		model.addAttribute("Publication", pub);//订阅刊物信息
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		
+		String tplFile = "finance/success";
+		String tplFileLow = "finance/successLow";
+		if(showAlert){
+			tplFile = "finance/alert";
+			tplFileLow = "finance/alertLow";
+		}
+		
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId == SysConfig.MODEL_INFO_ID){
+				return tplFileLow;
+			}
+		}catch (Exception e) {
+		}
+		
+		return tplFile;
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=pubDetail")
+	public String pubDetail(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int count = ParseUtil.paseInt(request.getParameter("count"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		int order = ParseUtil.paseInt(request.getParameter("o"), 0);
+		int pageNum = ParseUtil.paseInt(request.getParameter("pn"), 0);
+		String anchor = request.getParameter("a");
+		int effectPub = ParseUtil.paseInt(request.getParameter("ep"), -1);//影响刊物id，如订阅成功，退订
+		String backUrl = request.getParameter("backUrl");
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+		if(productId == 0){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);//如果u没有，就取p参数
+		}
+		if(cid == 0 && req_user != null){
+			cid = req_user.getCid();
+		}
+		if(cid > 0 && req_user == null){
+			req_user = new ClientUser();
+			req_user.setCid(cid);
+		}
+		
+		//ClientUser clientUser = clientService.getClientUserFromRequest(request);
+		 boolean isSelfAnalysis = false;
+		Publication pub = clientService.getPublication(pubId);
+		List<PublicationTerm> term_list = clientService.listHistory(pubId, count, req_user,isSelfAnalysis, 0, 30);
+		List<Integer> userSubscribeList = getMySubscribePubList(req_user, productId);
+		
+		model.addAttribute("Publication", pub);
+		model.addAttribute("TermList", term_list);
+		model.addAttribute("UserSubscribeList", userSubscribeList);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Order", order);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("PageNum", pageNum);
+		model.addAttribute("Anchor", anchor);
+		model.addAttribute("EffectPub", effectPub);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("P1", request.getParameter("p1"));
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId == SysConfig.MODEL_INFO_ID)
+				return "finance/pubDetailLow";
+		}catch (Exception e) {
+		}
+		return "finance/pubDetail";
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=subscribe")
+	public String subscribeNoRet(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:mpnws_set.go?"+sb.toString();
+	}
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=subscribe")
+	public String subscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String file = null;//需要配置到父模板中
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		int effectPub = ParseUtil.paseInt(request.getParameter("ep"), -1);//影响刊物id，如订阅成功，退订
+		int t = ParseUtil.paseInt(request.getParameter("t"), 0);//显示那个页面，0---我的订阅   1---订阅列表
+		String backUrl = request.getParameter("backUrl");
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+		
+		if(productId == 0){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);//如果u没有，就取p参数
+		}
+		if(cid == 0 && req_user != null){
+			cid = req_user.getCid();
+		}
+		if(cid > 0 && req_user == null){
+			req_user = new ClientUser();
+			req_user.setCid(cid);
+		}
+		
+		List<Integer> showPubIdList = getMySubscribePubList(req_user, productId);
+		Map<String, Integer> showPubIdMap = new HashMap<String, Integer>();
+		if(showPubIdList != null){
+			for(Integer pubId : showPubIdList){
+				showPubIdMap.put(String.valueOf(pubId), pubId);
+			}
+		}
+		
+		model.addAttribute("ShowPubIdMap", showPubIdMap);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("EffectPub", effectPub);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("Type", t);
+		model.addAttribute("P1", request.getParameter("p1"));
+		
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId == SysConfig.MODEL_INFO_ID)
+				return "finance/subscribeLow";
+		} catch (Exception e) {
+		}
+		return "finance/subscribe";
+	}
+	
+	private List<Integer> getMySubscribePubList(ClientUser req_user, int productId){
+		if(req_user == null || req_user.getCid() <= 0){
+			return null;
+		}
+		List<Integer> userSubscribeList = clientService.listSubscribe(req_user.getCid(), productId);
+		List<Integer> productPubIdList = clientService.listProductPubList(productId);
+		List<Integer> cancelPubList = clientService.getCanceledPubs(req_user, productId, ClientCancelPub.CANCEL_PUB);
+		List<Integer> showPubIdList = CommonUtils.combineList(
+				userSubscribeList, CommonUtils.filterList(productPubIdList, cancelPubList));
+		
+		return showPubIdList;
+	}
+	
+	//订阅列表页---基于产品的---备份方法
+	@RequestMapping(value = "/mpnws_set.go", params = "m=productSubscribe")
+	public String productSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		int order = ParseUtil.paseInt(request.getParameter("o"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pageNum = ParseUtil.paseInt(request.getParameter("pn"), 0);//第几页
+		int pageSize = ParseUtil.paseInt(request.getParameter("ps"), 20);//每页的列表数量
+		int effectPub = ParseUtil.paseInt(request.getParameter("ep"), -1);//影响刊物id，如订阅成功，退订
+		int t = ParseUtil.paseInt(request.getParameter("t"), 0);//显示那个页面，0---我的订阅   1---订阅列表
+		String backUrl = request.getParameter("backUrl");
+		
+		if(productId == 0){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 0);//如果u没有，就取p参数
+		}
+		if(cid == 0){
+			ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+			if(req_user!=null){
+				cid = req_user.getCid();
+			}
+		}
+		
+		List<Publication> pub_list = clientService.listSubscribePub(productId, order);
+		List<Integer> userSubscribeList = clientService.listSubscribe(cid, productId);
+		List<Publication> show_list = new ArrayList<Publication>();
+		
+		if(pub_list != null){
+			for(Publication pub : pub_list){
+				if(t==0){//查询的列表时我的订阅
+					if(userSubscribeList!=null && userSubscribeList.contains(pub.getId())){
+						show_list.add(pub);
+					}
+				}else{//查询的列表时我没有订阅的
+					if(userSubscribeList==null || !userSubscribeList.contains(pub.getId())){
+						show_list.add(pub);
+					}
+				}
+				
+			}
+		}
+		
+		// next page, prev page, page count ....
+		int size = show_list.size();
+		int count = size / pageSize + (size % pageSize > 0 ? 1 : 0);
+		int start_index = pageNum * pageSize;
+		if (start_index < 0 || start_index >= size) {// [0, size)
+			start_index = 0;
+		}
+		int end_index = start_index + pageSize;
+		if (end_index > size) {
+			end_index = size;
+		}
+
+		show_list = show_list.subList(start_index, end_index);
+		
+		
+		model.addAttribute("PubList", show_list);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("PageNum", pageNum);
+		model.addAttribute("NextPage", pageNum+1);
+		model.addAttribute("PrevPage", pageNum-1);
+		model.addAttribute("Count", count);
+		model.addAttribute("EffectPub", effectPub);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("Type", t);
+		model.addAttribute("P1", request.getParameter("p1"));
+		model.addAttribute("Product", clientService.getProduct(productId));
+		
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId == SysConfig.MODEL_INFO_ID)
+				return "subscribe/subscribeLow";
+		} catch (Exception e) {
+		}
+		return "subscribe/subscribe";
+	}
+	
+	
+		@RequestMapping(value = "/set.go", params = "m=productPubDetail")
+	public String productPubDetail(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int count = ParseUtil.paseInt(request.getParameter("count"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		int order = ParseUtil.paseInt(request.getParameter("o"), 0);
+		int pageNum = ParseUtil.paseInt(request.getParameter("pn"), 0);
+		String anchor = request.getParameter("a");
+		int effectPub = ParseUtil.paseInt(request.getParameter("ep"), -1);//影响刊物id，如订阅成功，退订
+		String backUrl = request.getParameter("backUrl");
+		
+		if(productId == 0){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);//如果u没有，就取p参数
+		}
+		if(cid == 0){
+			ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+			if(req_user!=null){
+				cid = req_user.getCid();
+			}
+		}
+		
+		ClientUser clientUser = clientService.getClientUserFromRequest(request);
+		
+		Publication pub = clientService.getPublication(pubId);
+		 boolean isSelfAnalysis = false;
+		List<PublicationTerm> term_list = clientService.listHistory(pubId, count, clientUser,isSelfAnalysis, 0, 30);
+		List<Integer> userSubscribeList = clientService.listSubscribe(cid, productId);
+		
+		model.addAttribute("Publication", pub);
+		model.addAttribute("TermList", term_list);
+		model.addAttribute("UserSubscribeList", userSubscribeList);
+		model.addAttribute("ProductId", productId);
+		model.addAttribute("Order", order);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("PageNum", pageNum);
+		model.addAttribute("Anchor", anchor);
+		model.addAttribute("EffectPub", effectPub);
+		model.addAttribute("PageUtil", PageUtil.getInstance());
+		model.addAttribute("BackUrl", backUrl);
+		model.addAttribute("P1", request.getParameter("p1"));
+		try{
+			int infId = (Integer) request.getAttribute("infId");
+			if(infId == SysConfig.MODEL_INFO_ID)
+				return "subscribe/pubDetailLow";
+		}catch (Exception e) {
+		}
+		return "subscribe/pubDetail";
+	}
+
+	@RequestMapping(value = "/set.go", params = "m=doProductSubscribe")
+	public String doProductSubscribe(ModelMap model,
+			HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int op = ParseUtil.paseInt(request.getParameter("op"), 0);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);// 默认产品1：早晚报
+		String redirectUrl = request.getParameter("redirectUrl");
+
+		if (productId <= 1) {
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);
+		}
+		if (cid == 0) {
+			ClientUser req_user = (ClientUser) request
+					.getAttribute("clientUser");
+			if (req_user != null) {
+				cid = req_user.getCid();
+			}
+		}
+
+		if (op == 0) {
+			clientService.addSubscribe(cid, pubId, productId);
+		} else if (op == 1) {
+			clientService.delSubscribe(cid, pubId, productId);
+		}
+
+		return "redirect:" + redirectUrl;
+	}
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=newsSubscribe")
+	public String newsSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		String s_pubIds = request.getParameter("pubIds");
+		ClientUser req_user = (ClientUser) request.getAttribute("clientUser");
+		boolean hadSubscribe = true;
+		
+		if(productId == 0){
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);//如果u没有，就取p参数
+		}
+		if(cid == 0 && req_user != null){
+			cid = req_user.getCid();
+		}
+		if(cid > 0 && req_user == null){
+			req_user = new ClientUser();
+			req_user.setCid(cid);
+		}
+		
+		List<Integer> showPubIdList = getMySubscribePubList(req_user, productId);
+		
+		if(s_pubIds != null){
+			String[] a_pubIds = s_pubIds.split(",");
+			int[] pubIds = com.wap.sohu.mobilepaper.util.ParseUtil.parseIntArray(a_pubIds, 0);
+			for(int pubId : pubIds){
+				if(showPubIdList != null && !showPubIdList.contains(pubId)){//如果发现有一个没订阅
+					hadSubscribe = false;
+					break;
+				}
+			}
+		}else{
+			hadSubscribe = false;
+		}
+		
+		model.addAttribute("Cid", cid);
+		model.addAttribute("P1", request.getParameter("p1"));
+		model.addAttribute("GoBackCount", -1);
+		model.addAttribute("PubIds", s_pubIds);
+		model.addAttribute("ProductId", productId);
+		
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId == SysConfig.MODEL_INFO_ID){
+				if(hadSubscribe){
+					return "finance/newsSubscribeLowOk";
+				}
+				return "finance/newsSubscribeLow";
+				
+			}
+		} catch (Exception e) {
+		}
+		if(hadSubscribe){
+			return "finance/newsSubscribeOk";
+		}
+		return "finance/newsSubscribe";
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=doNewsSubscribe")
+	public String doNewsSubscribeNoRet(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		
+		StringBuilder sb = new StringBuilder();
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			sb.append(paraName).append("=").append(value).append("&");
+		}	
+		
+		return "redirect:mpnws_set.go?"+sb.toString();		
+		
+	}
+	
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=doNewsSubscribe")
+	public String doNewsSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		String s_pubIds = request.getParameter("pubIds");
+		int productId = ParseUtil.paseInt(request.getParameter("u"), 1);// 默认产品1：早晚报
+
+		if (productId <= 1) {
+			productId = ParseUtil.paseInt(request.getParameter("p"), 1);
+		}
+		if (cid == 0) {
+			ClientUser req_user = (ClientUser) request
+					.getAttribute("clientUser");
+			if (req_user != null) {
+				cid = req_user.getCid();
+			}
+		}
+
+		if(s_pubIds != null){
+			String[] a_pubIds = s_pubIds.split(",");
+			int[] pubIds = com.wap.sohu.mobilepaper.util.ParseUtil.parseIntArray(a_pubIds, 0);
+			for(int pubId : pubIds){
+				clientService.addSubscribe(cid, pubId, productId);
+			}
+		}
+		
+		try {
+			int infId = (Integer) request.getAttribute("infId");
+			if (infId == SysConfig.MODEL_INFO_ID) {
+				model.addAttribute("GoBackCount", -1);
+				return "finance/newsSubscribeLowOk";
+			}
+		} catch (Exception e) {
+		}
+		model.addAttribute("GoBackCount", -2);
+		model.addAttribute("PubIds", s_pubIds);
+		model.addAttribute("ProductId", productId);
+		return "finance/newsSubscribeOk";
+	}
+	
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=listPageSubscribe")
+	public String listPageSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		String backUrl = request.getParameter("backUrl");
+		if (cid == 0) {
+			ClientUser req_user = (ClientUser) request
+					.getAttribute("clientUser");
+			if (req_user != null) {
+				cid = req_user.getCid();
+			}
+		}
+		
+		List<PubPageSubscribeShowObject> pubPageSubscribeShowList = 
+			subscriptionService.listUserPageSubscribe(cid, pubId);
+		
+		model.addAttribute("PubPageSubscribeShowList", pubPageSubscribeShowList);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("PubId", pubId);
+		model.addAttribute("BackUrl", PageUtil.getInstance().decode(backUrl));
+		
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "subscribe/listPageLow";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH){
+				return "subscribe/listPageTouch";
+			}
+		} catch (Exception e) {
+		}
+		
+		return "subscribe/listPage";
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=addPageSubscribe")
+	public String addPageSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int pageId = ParseUtil.paseInt(request.getParameter("pageId"), 0);
+		String backUrl = request.getParameter("backUrl");
+		
+		subscriptionService.addPageSubscribe(cid, pubId, pageId);
+		return "redirect:mpnws_set.go?m=listPageSubscribe&cid="+cid+"&pubId="+pubId+"&pageId="+pageId+"&backUrl="+PageUtil.getInstance().encode(backUrl);
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=delPageSubscribe")
+	public String delPageSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		int pageId = ParseUtil.paseInt(request.getParameter("pageId"), 0);
+		String backUrl = request.getParameter("backUrl");
+		
+		subscriptionService.delPageSubscribe(cid, pubId, pageId);		
+		return "redirect:mpnws_set.go?m=listPageSubscribe&cid="+cid+"&pubId="+pubId+"&pageId="+pageId+"&backUrl="+PageUtil.getInstance().encode(backUrl);
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=sortPageSubscribeList")
+	public String sortPageSubscribeList(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		String s_pageIds = request.getParameter("pageIds");
+		String backUrl = request.getParameter("backUrl");
+		
+		if(s_pageIds != null){
+			String[] a_pageIds = s_pageIds.split(",");
+			int[] pageIds = com.wap.sohu.mobilepaper.util.ParseUtil.parseIntArray(a_pageIds, 0);
+			subscriptionService.savePageSubscribeSequence(cid, pubId, pageIds);
+		}
+		return "redirect:mpnws_set.go?m=listPageSubscribe&cid="+cid+"&pubId="+pubId+"&backUrl="+PageUtil.getInstance().encode(backUrl);
+	}
+	
+	@RequestMapping(value = "/set.go", params = "m=toDefaultPageSubscribe")
+	public String toDefaultPageSubscribe(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		String backUrl = request.getParameter("backUrl");
+		
+		subscriptionService.toDefaultPageSubscribe(cid, pubId);
+		
+		return "redirect:mpnws_set.go?m=listPageSubscribe&cid="+cid+"&pubId="+pubId+"&backUrl="+PageUtil.getInstance().encode(backUrl);
+	}
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=listPubCity")
+	public String listPubCity(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		String p1 = request.getParameter("p1");
+		Map<String, PubCity> pubCityNameCityMap = null;
+		
+		if(pubId > 0) {
+			Map<String, List<PubCity>> pubCityMap = areaService.getPubProvinceCityListMap(pubId);
+			
+			if(pubCityMap != null) {
+				List<ProvincePubCityList> pubCityMapList = new ArrayList<ProvincePubCityList>();
+				for(String key : pubCityMap.keySet()) {
+					ProvincePubCityList obj = new ProvincePubCityList();
+					obj.setProvince(key);
+					obj.setPubCityList(pubCityMap.get(key));
+					pubCityMapList.add(obj);
+					
+					if(pubCityMap.get(key) == null) {
+						continue;
+					}
+					for(PubCity pubCity : pubCityMap.get(key)) {
+						if(pubCityNameCityMap == null) {
+							pubCityNameCityMap = new HashMap<String, PubCity>();
+						}
+						pubCityNameCityMap.put(pubCity.getName(), pubCity);
+					}
+				}
+				model.addAttribute("PubCityMapList", pubCityMapList);
+			}
+		}
+		model.addAttribute("PubId", pubId);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("P1", p1);
+		model.addAttribute("PubCityMap", pubCityNameCityMap);
+		model.addAttribute("ShowBackUrl", request.getParameter("backUrl"));
+		PageUtil.getInstance().transmitParameter(model, request, "backUrl");
+		
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "userset/listPubCity";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH){
+				return "userset/listPubCityTouch";
+			}
+		} catch (Exception e) {
+		}
+		
+		return "userset/listPubCity";
+	}
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=searchPubCity")
+	public String searchPubCity(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String cityName = request.getParameter("cityName");
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		long cid = ClientUtil.getCidFromRequest(request);
+		String p1 = request.getParameter("p1");
+		if(cityName != null && pubId > 0) {
+			List<PubCity> pubCityList = areaService.findPubCity(pubId, cityName);
+			model.addAttribute("PubCityList", pubCityList);
+		}
+		model.addAttribute("PubId", pubId);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("P1", p1);
+		model.addAttribute("ShowBackUrl", request.getParameter("backUrl"));
+		PageUtil.getInstance().transmitParameter(model, request, "backUrl");
+		
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "userset/searchPubCity";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH){
+				return "userset/searchPubCityTouch";
+			}
+		} catch (Exception e) {
+		}
+		
+		return "userset/searchPubCity";
+	}
+	
+	@RequestMapping(value = "/mpnws_set.go", params = "m=setPubCity")
+	public String setPubCity(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		int pubCityId = ParseUtil.paseInt(request.getParameter("pubCityId"), 0);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		String p1 = request.getParameter("p1");
+		
+		if (cid == 0) {
+			ClientUser req_user = (ClientUser) request
+					.getAttribute("clientUser");
+			if (req_user != null) {
+				cid = req_user.getCid();
+			}
+		}
+		
+		if(cid > 0 && pubId > 0 && pubCityId > 0) {
+			UserPubCity userPubCity = new UserPubCity();
+			userPubCity.setCid(cid);
+			userPubCity.setPubId(pubId);
+			userPubCity.setPubCityId(pubCityId);
+			areaService.setPubCity(userPubCity);
+			
+			PubCity pubCity = areaService.getPubCity(pubId, pubCityId);
+			model.addAttribute("PubCity", pubCity);
+		}
+		
+		model.addAttribute("PubId", pubId);
+		model.addAttribute("Cid", cid);
+		model.addAttribute("P1", p1);
+		model.addAttribute("ShowBackUrl", request.getParameter("backUrl"));
+		PageUtil.getInstance().transmitParameter(model, request, "backUrl");
+		
+		try {
+			int tplType = (Integer) request.getAttribute("tplType");
+			if (tplType == SysConfig.TPL_TYPE_LOW) {
+				return "userset/savePubCityOk";
+			}
+			if (tplType == SysConfig.TPL_TYPE_TOUCH){
+				return "userset/savePubCityOkTouch";
+			}
+		} catch (Exception e) {
+		}
+		
+		return "userset/savePubCityOk";
+	}
+}

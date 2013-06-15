@@ -1,0 +1,272 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.annotation.PostConstruct;
+
+import org.apache.tools.ant.util.DateUtils;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Repository;
+
+import com.sohu.wap.sso.util.DateUtil;
+import com.wap.sohu.mobilepaper.cache.ClientCacheManager;
+import com.wap.sohu.mobilepaper.cache.ICache;
+import com.wap.sohu.mobilepaper.dao.UserRegistDao.dataMapper;
+import com.wap.sohu.mobilepaper.model.UserRegist;
+import com.wap.sohu.mobilepaper.model.UserSubscribe;
+import com.wap.sohu.mobilepaper.util.CommonUtils;
+
+@Repository("userSubscribeDao")
+public class UserSubscribeDao extends BaseJdbcSupport {
+
+	private SimpleJdbcInsert insertActor = null;
+
+	@PostConstruct
+	public void init() {
+		insertActor = new SimpleJdbcInsert(getSubscribeJdbcTemplate().getDataSource())
+				.withTableName("c_user_subscribe").usingGeneratedKeyColumns("id");
+	}
+
+	public boolean addUserSubscribeBatch(List<UserSubscribe> usList) {
+		try {
+		//	System.out.println("addUserSubscribeBatch begin ===" + usList.size() + "\t" + usList);
+			String date = DateUtil.date2String(new Date(), "yyyy-MM-dd HH:mm:ss");
+			String[] sqlArray = new String[usList.size()];
+			for (int i = 0; i < usList.size(); i++) {
+				UserSubscribe us = usList.get(i);
+				StringBuilder builder = new StringBuilder();
+				builder.append(" INSERT INTO `c_user_subscribe` (`cid`,`productId`,`subId`,`push`,`updateTime`, `isTransfer`) VALUES ( ");
+				builder.append(us.getCid());
+				builder.append(" ,");
+				builder.append(us.getProductId());
+				builder.append(" ,");
+				builder.append(us.getSubId());
+				builder.append(" ,");
+				builder.append(us.getPush());
+				builder.append(" ,'");
+				builder.append(date);
+				builder.append("' ,");
+				builder.append(us.getIsTransfer());
+				builder.append(" )");
+				sqlArray[i] = builder.toString();
+			}
+			if (sqlArray != null && sqlArray.length > 0) {
+				try {
+					this.getSubscribeJdbcTemplate().batchUpdate(sqlArray);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			} 
+	//		System.out.println("addUserSubscribeBatch end ===" + usList.size() + "\t" + usList);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+	}
+
+	ICache<String, HashMap<Integer, Long>> userSubIdSetCache = ClientCacheManager.getInstance().getCache(
+			"userSubIdSetCache", 600, 60);
+
+	public HashMap<Integer, Long> getSubIdKeyMap(long cid, int productId) {
+		String key = "idMap" + cid + "_" + productId;
+		HashMap<Integer, Long> result = userSubIdSetCache.get(key);
+		if (result == null) {
+			result = new HashMap<Integer, Long>();
+			List<UserSubscribe> list = list(cid, productId);
+			if (list != null) {
+				for (UserSubscribe us : list) {
+					result.put(us.getSubId(), us.getId());
+				}
+			}
+			userSubIdSetCache.put(key, result);
+		}
+		return result;
+	}
+
+	public boolean updateSubscribeMap(List<UserSubscribe> usList) {
+		try {
+			List<String> sqlList = new ArrayList<String>();
+			List<UserSubscribe> userSubscribe = new ArrayList<UserSubscribe>();
+			for (UserSubscribe us : usList) {
+				HashMap<Integer, Long> idMap = getSubIdKeyMap(us.getCid(), us.getProductId());
+				Long id = idMap.get(us.getSubId());
+				if (id != null && id > 0) {
+					String sql = "update c_user_subscribe set isTransfer =" + us.getIsTransfer() + ", push ="
+							+ us.getPush() + ", updateTime = '" + DateUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss")
+							+ "' where id = " + id;
+					sqlList.add(sql);
+				} else {
+					userSubscribe.add(us);
+				}
+			}
+			if (CommonUtils.isNotEmpty(sqlList)) {
+				String[] sqlArray = new String[sqlList.size()];
+				sqlList.toArray(sqlArray);
+				this.getSubscribeJdbcTemplate().batchUpdate(sqlArray);
+			}
+			addUserSubscribeBatch(userSubscribe);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+	}
+
+	public boolean addUserSubscribe(UserSubscribe us) {
+		long pkId = getIdByUnqiueKey(us.getCid(), us.getProductId(), us.getSubId());
+		if (pkId > 0) {
+			String sql = "update c_user_subscribe set isTransfer = ? , push =?, updateTime = ? where id = ?";
+			getSubscribeJdbcTemplate().update(sql,
+					new Object[] { us.getIsTransfer(), us.getPush(), new Timestamp(System.currentTimeMillis()), pkId });
+		} else {
+			SqlParameterSource parameters = new BeanPropertySqlParameterSource(us);
+			Number num = insertActor.executeAndReturnKey(parameters);
+			return num.intValue() > 0 ? true : false;
+		}
+		return true;
+	}
+
+	public boolean update(long cid, int productId, int subId, int push) {
+		String sql = "update c_user_subscribe set push=? where cid=? and productId=? and subId=?";
+		int rows = getSubscribeJdbcTemplate().update(sql, new Object[] { push, cid, productId, subId });
+		return rows > 0 ? true : false;
+	}
+
+	public boolean delete(long cid, int productId, int subId) {
+		int rows = getSubscribeJdbcTemplate().update(
+				"delete from c_user_subscribe where cid=? and productId=? and subId=?",
+				new Object[] { cid, productId, subId });
+		return rows > 0 ? true : false;
+	}
+
+	public List<UserSubscribe> list(long cid, int productId) { 
+		String sql = "select * from c_user_subscribe where cid=? and productId=?";
+		return getSubscribeJdbcTemplate().query(sql, new Object[] { cid, productId }, new dataMapper());
+	}
+
+	public List<Long> getIdList(long cid, int productId) { 
+		String sql = "select id from c_user_subscribe where cid=? and productId=?";
+		return getSubscribeJdbcTemplate().query(sql, new Object[] { cid, productId }, new idDataMapper());
+	}
+	
+	public List<Integer> getSubIdList(long cid, int productId) { 
+		String sql = "select subId from c_user_subscribe where cid=? and productId=?";
+		return getSubscribeJdbcTemplate().query(sql, new Object[] { cid, productId }, new subIdDataMapper());
+	}
+
+	public List<UserSubscribe> listByCid(long cid) {
+		// System.out.println("listByCid===" + cid);
+		String sql = "select * from c_user_subscribe where cid=? ";
+		return getSubscribeJdbcTemplate().query(sql, new Object[] { cid }, new dataMapper());
+	}
+
+	public long getIdByUnqiueKey(long cid, int pid, int subId) {
+		String SQL = "select max(id) from c_user_subscribe where cid= ? and productid = ? and subId= ? ";
+		try {
+			System.out.println("getId begin===" + cid + "\t" + pid + "\t" + subId + "\t");
+			Long id = getSubscribeJdbcTemplate().queryForLong(SQL, new Object[] { cid, pid, subId });
+			System.out.println("getId  end===" + SQL);
+			if(id ==null){
+			    return 0;
+			}
+			return id;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return 0;
+		}
+	}
+
+	public Map<Integer, List<UserSubscribe>> getUserSubscribeListMap(long cid) {
+		List<UserSubscribe> lists = listByCid(cid);
+		Map<Integer, List<UserSubscribe>> map = new HashMap<Integer, List<UserSubscribe>>();
+		for (UserSubscribe us : lists) {
+			List<UserSubscribe> pLists = map.get((us.getProductId()));
+			if (pLists == null) {
+				pLists = new ArrayList<UserSubscribe>();
+				map.put(us.getProductId(), pLists);
+			}
+			pLists.add(us);
+		}
+		return map;
+	}
+
+	private class idDataMapper implements RowMapper<Long> {
+		public Long mapRow(ResultSet rs, int rowNum) throws SQLException {
+			try {
+				return rs.getLong("id");
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new SQLException();
+			}
+		}
+	}
+	
+	private class subIdDataMapper implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			try {
+				return rs.getInt("subId");
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new SQLException();
+			}
+		}
+	}
+
+	class dataMapper implements RowMapper<UserSubscribe> {
+
+		@Override
+		public UserSubscribe mapRow(ResultSet rs, int arg1) throws SQLException {
+			UserSubscribe us = new UserSubscribe();
+			us.setId(rs.getLong("id"));
+			us.setCid(rs.getLong("cid"));
+			us.setProductId(rs.getInt("productId"));
+			us.setSubId(rs.getInt("subId"));
+			us.setPush(rs.getInt("push"));
+			us.setUpdateTime(rs.getTimestamp("updateTime"));
+			us.setIsTransfer(rs.getInt("isTransfer"));
+			return us;
+		}
+
+	}
+
+	public boolean checkSubSync(long cid) {
+		System.out.println("checkSubSync===" + cid);
+		Integer id = getSubscribeJdbcTemplate().queryForInt("select count(1) from c_user_subscribe_sync where cid = ?",
+				new Object[] { cid });
+		if (id != null && id.intValue() > 0) {
+			return true;
+		}
+		return false;
+	}
+
+	public boolean updateSubSync(final long cid) {
+		try {
+			System.out.println("updateSubSync===" + cid);
+			this.getSubscribeJdbcTemplate().update("replace INTO c_user_subscribe_sync (cid,stime )values(?,?)",
+					new Object[] { cid, new Timestamp(System.currentTimeMillis()) });
+		} catch (Exception e) {
+			System.out.println("error:updateSubSync:" + e.getMessage());
+			return false;
+		}
+		return true;
+
+	}
+}

@@ -1,0 +1,406 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+import com.wap.sohu.mobilepaper.model.ActivitiesUser;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.LoadingPage;
+import com.wap.sohu.mobilepaper.model.NewsComment;
+import com.wap.sohu.mobilepaper.model.SMSMessage;
+import com.wap.sohu.mobilepaper.service.ActivitiesServiceImpl;
+import com.wap.sohu.mobilepaper.service.IActivitiesService;
+import com.wap.sohu.mobilepaper.service.IClientControlService;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.IGroupPicService;
+import com.wap.sohu.mobilepaper.service.IHttpProxyService;
+import com.wap.sohu.mobilepaper.service.INewsCommentService;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.Md5Util;
+import com.wap.sohu.mobilepaper.util.ParseUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientController {
+	private static final Logger logger = Logger
+			.getLogger(ClientController.class);
+
+	@Autowired
+	protected INewsCommentService newsCommentService;
+
+	@Autowired
+	protected IClientService clientService;
+
+	@Autowired
+	protected IHttpProxyService httpProxyService;
+
+	@Autowired
+	protected IActivitiesService activitiesService;
+
+	@Autowired
+	protected IClientControlService clientControlService;
+	
+	@Autowired
+	protected IGroupPicService groupPicService;
+
+	@Deprecated
+	@RequestMapping(value = "/client/newsComment.go", params = "m=list")
+	public String newsComment(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+
+		int sid = HttpUtil.getRequestInt(request, "sid", 0);
+		int pubId = HttpUtil.getRequestInt(request, "pubId", 0);
+		int termId = HttpUtil.getRequestInt(request, "termId", 0);
+		int pageNum = HttpUtil.getRequestInt(request, "pageNum", 0);
+		int newsType = HttpUtil.getRequestInt(request, "newsType", 0);
+		int shortParam = HttpUtil.getRequestInt(request, "short", 0);
+		int newsId = HttpUtil.getRequestInt(request, "newsId", 0);
+		int nid = HttpUtil.getRequestInt(request, "nid", 0);
+		int groupPicId = HttpUtil.getRequestInt(request, "gid", 0);
+		String title = request.getParameter("title");
+		String termpage = request.getParameter("termpage");
+		String termpages = request.getParameter("termpages");
+
+		// System.out.println("title:"+title);
+		// System.out.println("termpage:"+termpage);
+		// System.out.println("termpages:"+termpages);
+
+		termpage = (termpage == null) ? "" : termpage;
+		termpages = (termpages == null) ? "" : termpages;
+		title = (title == null) ? "" : title;
+
+		int p = HttpUtil.getRequestInt(request, "p", 1);
+		int pageSize = 10;
+		int index = p - 1;
+
+		int commentCount = newsCommentService
+				.getCommentCountByNewsIdOrGroupPicId(newsId, groupPicId);
+		List<NewsComment> list;
+		list = newsCommentService.getCommentList(String.valueOf(sid), index,
+				pageSize, true);
+
+		int totalPages = (int) Math.ceil((double) commentCount
+				/ (double) pageSize);
+		totalPages = totalPages == 0 ? 1 : totalPages;
+
+		int commentShowNumTop = commentCount - ((p - 1) * pageSize);
+
+		String action = request.getParameter("action");
+		if (action != null && "add".equals(action)) {
+			NewsComment comment = new NewsComment();
+			comment.setContent(request.getParameter("msg"));
+			comment.setCtime(new SimpleDateFormat("MM/dd HH:mm")
+					.format(new Date()));
+			comment.setPassport(null);
+			comment.setPostIp("13800000001");
+			comment.setAuthor("搜狐新闻客户端网友");
+			comment.setNid(nid + "");
+			newsCommentService.addComment(comment);
+
+			ArrayList<NewsComment> newList = new ArrayList<NewsComment>();
+			newList.add(comment);
+			for (int i = 0; i < list.size() - 1; i++) {
+				newList.add(list.get(i));
+			}
+			list = newList;
+			commentShowNumTop++;
+		}
+
+		String[] termpageArr = termpage.split(",");
+		model.addAttribute("returnPageNum", termpageArr[0]);
+		model.addAttribute("returnName", termpageArr[1]);
+
+		List<String[]> returnList = new ArrayList<String[]>();
+		String[] termpagesArr = termpages.split(";");
+		for (String aReturnPage : termpagesArr) {
+			if (!"".equals(aReturnPage)) {
+				returnList.add(aReturnPage.split(","));
+			}
+		}
+		model.addAttribute("returnList", returnList);
+
+		model.addAttribute("p", p);
+		model.addAttribute("commentShowNumTop", commentShowNumTop);
+		model.addAttribute("title", title);
+		try {
+			model.addAttribute("titleEncode", java.net.URLEncoder.encode(title,
+					"UTF-8"));
+			model.addAttribute("termpage", java.net.URLEncoder.encode(termpage,
+					"UTF-8"));
+			model.addAttribute("termpages", java.net.URLEncoder.encode(
+					termpages, "UTF-8"));
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.error("", e);
+		}
+		model.addAttribute("nid", nid);
+		model.addAttribute("list", list);
+		model.addAttribute("pageSize", pageSize);
+		model.addAttribute("totalPages", totalPages);
+		model.addAttribute("commentCount", commentCount);
+		model.addAttribute("sid", sid);
+		model.addAttribute("newsType", newsType);
+		model.addAttribute("short", shortParam);
+		model.addAttribute("newsId", newsId);
+		model.addAttribute("pageNum", pageNum);
+		model.addAttribute("termId", termId);
+		model.addAttribute("pubId", pubId);
+
+		return "client/newsCommentList2";
+	}
+
+	@RequestMapping(value = "/client/help.go")
+	public String help(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int productId = 1;
+		Integer version = 2;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null) {
+			ClientInstall clientInstallSend = (ClientInstall) request
+					.getAttribute("clientInstall");
+			if (clientInstallSend != null) {
+				productId = clientInstallSend.getProductId();
+			}
+			Map<Integer, Integer> versionMap = clientUser.getApiVersionMap();
+			Integer apiVersion = versionMap.get(productId);
+			if (apiVersion != null && apiVersion <= 3) {
+				version = 1;
+			}
+		}
+		model.addAttribute("version", version);
+		return "client/help";
+	}
+
+	@RequestMapping(value = "/client/preLoadUser.go")
+	public String preLoadUsers(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+
+		int beginCid = HttpUtil.getRequestInt(request, "beginCid", 0);
+		int endCid = HttpUtil.getRequestInt(request, "endCid", 0);
+		clientService.preLoadUsers(beginCid, endCid);
+
+		model.addAttribute("beginCid", beginCid);
+		model.addAttribute("endCid", endCid);
+		return "tools/preLoadUsers";
+	}
+
+	@RequestMapping(value = "/client/proxy.go", params = "m=indexPage")
+	public String indexPage(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int termId = ParseUtil.paseInt(request.getParameter("termId"), 0);
+		int selfAnalysis = ParseUtil.paseInt(request
+				.getParameter("selfAnalysis"), -1);
+		int fromClient = ParseUtil.paseInt(request.getParameter("fromClient"),
+				-1);
+		int pubId = ParseUtil.paseInt(request.getParameter("pubId"), 0);
+		String fromShare = request.getParameter("fromShare");
+		String clientVersion = HttpUtil.getRequestString(request,
+				"clientVersion", "");// 客户端版本
+		Integer infId = (Integer) request.getAttribute("infId");
+		int pubCityId = ParseUtil.paseInt(request.getParameter("pubCityId"), 0);
+		int weatherCode = ParseUtil.paseInt(
+				request.getParameter("weatherCode"), 0);
+		if (infId == null) {
+			infId = new Integer(SysConfig.DEFAULT_ADAPT_ID);
+		}
+
+		if (termId > 0) {
+			String url = "http://" + request.getLocalAddr() + ":"
+					+ request.getLocalPort() + request.getContextPath()
+					+ "/vm/view.do?m=list&pageNum=1&sid=" + infId + "&termId="
+					+ termId + "&pubType=0&pubId=" + pubId + "&fromShare="
+					+ fromShare;
+			if (selfAnalysis > 0) {
+				url += "&selfAnalysis=" + selfAnalysis;
+			}
+			if (StringUtils.isNotBlank(clientVersion)) {
+				url += "&clientVersion=" + clientVersion;
+			}
+			if (pubCityId > 0) {
+				url = url.concat("&pubCityId=" + pubCityId);
+			}
+			if (fromClient >= 0) {
+				url = url.concat("&fromClient=" + fromClient);
+			}
+			if (weatherCode > 0) {
+				url = url.concat("&showWeather=1&weatherCode=" + weatherCode);
+			}
+			String content = httpProxyService.getContentFromUrl(url);
+			model.addAttribute("Content", content);
+			// logger.info("useTime="+(System.currentTimeMillis()-startTime)+"  url="+url);
+
+			try {
+				RenderUtil.renderHtml(response, content);
+			} catch (Exception e) {
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * 拦截了动态新闻列表中的新闻预览地址,对view.do?m=news的地址进行动态预览
+	 * 
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/client/view.do", params = "m=news")
+	public String news(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		long startTime = System.currentTimeMillis();
+
+		String sid = request.getParameter("sid");
+		String termId = request.getParameter("termId");
+		String pubId = request.getParameter("pubId");
+		String pageNum = request.getParameter("pageNum");
+		String newsType = request.getParameter("newsType");
+		String shortStr = request.getParameter("short");
+		String p = request.getParameter("p");
+		String newsId = request.getParameter("newsId");
+		String show = request.getParameter("show");
+		String fromShare = request.getParameter("fromShare");
+
+		StringBuffer sb = new StringBuffer();
+		sb.append("&sid=").append(sid).append("&pubId=").append(pubId).append(
+				"&termId=").append(termId).append("&pageNum=").append(pageNum)
+				.append("&newsType=").append(newsType).append("&short=")
+				.append(shortStr).append("&newsId=").append(newsId).append(
+						"&p=").append(p).append("&show=").append(show).append(
+						"&fromShare=").append(fromShare);
+
+		String url = "http://" + request.getLocalAddr() + ":"
+				+ request.getLocalPort() + request.getContextPath()
+				+ "/vm/view.do?m=news" + sb.toString();
+		System.out.println(url);
+		String content = httpProxyService.getContentFromUrl(url);
+		model.addAttribute("Content", content);
+		logger.info("useTime=" + (System.currentTimeMillis() - startTime)
+				+ "  url=" + url);
+
+		try {
+			RenderUtil.renderHtml(response, content);
+		} catch (Exception e) {
+		}
+
+		return null;
+	}
+
+	@RequestMapping(value = "/client/view.do", params = "m=list")
+	public String list(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		return indexPage(model, request, response);
+	}
+
+	// 生成MD5消息摘要
+	@RequestMapping(value = "/client/generatekey.go")
+	public void generateMD5Key(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String callBackMethodName = request.getParameter("callback");
+		if (callBackMethodName == null) {
+			callBackMethodName = "callback";
+		}
+		Random rdm = new Random();
+		int r = rdm.nextInt(100);
+		long t = System.currentTimeMillis();
+
+		String seed = String.valueOf(t) + String.valueOf(r);
+		String key = Md5Util.MD5Encode(seed);
+		try {
+			String json = callBackMethodName + "({\"key\":\"" + key + "\"})";
+			response.getWriter().print(json);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	// 填手机号，发送信息，信息：安装包地址
+	@RequestMapping(value = "/client/sendmsg.go")
+	public void sendMsg(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		String phoneNumber = request.getParameter("number");
+		String checkKey = request.getParameter("code");
+		String checkCode = request.getParameter("chkcode");
+		int platform = ParseUtil.paseInt(request.getParameter("platform"), 0);
+		String channel = request.getParameter("channel");
+		int cat = ParseUtil.paseInt(request.getParameter("cat"), 1);
+		String callBackMethodName = request.getParameter("callback");
+
+		int code = ActivitiesServiceImpl.SUCC;
+		if (callBackMethodName == null) {
+			callBackMethodName = "callback";
+		}
+
+		boolean checkKaptcha = activitiesService.checkKaptcha(checkKey,
+				checkCode);
+
+		if (checkKaptcha) {
+			ActivitiesUser activitiesUser = new ActivitiesUser();
+			activitiesUser.setCat(cat);
+			activitiesUser.setPhoneNumber(phoneNumber);
+			code = activitiesService.addActivitiesUser(activitiesUser);
+			if (code == ActivitiesServiceImpl.SUCC) {
+				String url = activitiesService.getSMSContentSohuNews(platform);
+				SMSMessage smsMessage = new SMSMessage();
+				smsMessage.setContent(url);
+				smsMessage.setPhoneNumber(phoneNumber);
+				smsMessage.setSaveTime(new Date());
+				activitiesService.addSMSMessage(smsMessage);
+			}
+
+		} else {
+			code = ActivitiesServiceImpl.CHECK_CODE_ERROR;
+		}
+
+		try {
+			String json = callBackMethodName + "({\"data\":\"" + code + "\"})";
+			response.getWriter().print(json);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	@RequestMapping(value = "/client/ctl.go", params = "m=loadingPage")
+	public void loadingPage(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstall = (ClientInstall) request
+				.getAttribute("clientInstall");
+		LoadingPage loadingPage = clientControlService.getLoadingPage(
+				clientUser.getPlatform(), clientUser.getPlatformVersion(),
+				clientInstall.getLoadingPageId());
+		RenderUtil.renderXml(response, loadingPage.toString());
+	}
+	
+	@RequestMapping(value = "/client/ctl.go", params = "m=clearGroupPicCache")
+	public void clearGroupPicCache(ModelMap model, HttpServletRequest request,
+			HttpServletResponse response) {
+		int gid = ParseUtil.paseInt(request.getParameter("gid"), 0);
+		if (gid > 0) {
+			if(groupPicService.clearGroupPicCache(gid)){
+				RenderUtil.renderText(response, "1");
+				return;
+			}
+		}
+		RenderUtil.renderText(response, "0");
+	}
+
+}

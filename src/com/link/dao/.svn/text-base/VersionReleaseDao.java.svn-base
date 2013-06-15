@@ -1,0 +1,95 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.VersionRelease;
+
+@Repository("versionReleaseDao")
+public class VersionReleaseDao extends BaseJdbcSupport {
+	
+	@Override
+    public JdbcTemplate getJdbcTemplate() {
+		return upgradeJdbcTemplate;
+	}
+	
+	public VersionRelease find(int id){
+		List<VersionRelease> lst = getJdbcTemplate()
+			.query("select * from u_version_release where id=?", 
+					new Object[] {id},
+					new dataMapper());
+		if(lst!=null && lst.size()>0){
+			return lst.get(0);
+		}
+		return null;
+	}
+	
+	public List<VersionRelease> findActiveVersion(int productId, String platform){
+		return getJdbcTemplate().query(
+				"select * from u_version_release where product=? and platform=? and isActive=1 order by version desc", 
+				new Object[]{productId, platform}, 
+				new dataMapper());
+		
+	}
+	
+	public VersionRelease findByVersion(int productId, String platform, String version){
+		List<VersionRelease> list = getJdbcTemplate().query(
+				"select * from u_version_release where product=? and platform=? and version=?", 
+				new Object[]{productId, platform, version}, 
+				new dataMapper());
+		if(list!=null && list.size()>0){
+			return list.get(0);
+		}
+		return null;
+	}
+	
+	public List<VersionRelease> list(){
+		return getJdbcTemplate().query(
+				"select * from u_version_release order by releaseDate desc", 
+				new dataMapper());
+	}
+	
+	public List<VersionRelease> list(int page, int count){
+		return getJdbcTemplate().query(
+				"select * from u_version_release order by releaseDate desc limit ?, ?",
+				new Object[]{page*count, count},
+				new dataMapper());
+	}
+	
+//	public boolean updateActive(int id, int active){
+//		return getJdbcTemplate().update(
+//				"update u_version_release set isActive=? where id=?", 
+//				new Object[]{active, id})>0?true:false;
+//	}
+	
+	public int count(){
+		return getJdbcTemplate().queryForInt("select count(*) from u_version_release");
+	}
+	
+	private static final class dataMapper implements RowMapper<VersionRelease> {
+		public VersionRelease mapRow(ResultSet rs, int rowNum) throws SQLException {
+			VersionRelease vr = new VersionRelease();
+			vr.setId(rs.getInt("id"));
+			vr.setProduct(rs.getInt("product"));
+			vr.setPlatform(rs.getString("platform"));
+			vr.setTitle(rs.getString("title"));
+			vr.setVersion(rs.getString("version"));			
+			vr.setUrl(rs.getString("url"));
+			vr.setAlert(rs.getString("alert"));
+			vr.setSize(rs.getInt("size"));
+			vr.setDate(rs.getDate("releaseDate"));
+			vr.setIsActive(rs.getInt("isActive"));
+			vr.setDate(rs.getDate("date"));		
+			vr.setEnforcement(rs.getString("enforcement"));
+			vr.setImportant(rs.getString("important"));
+			vr.setOptional(rs.getString("optional"));
+			vr.setReleaseDate(rs.getDate("releaseDate"));
+			return vr;
+		}
+	}
+}

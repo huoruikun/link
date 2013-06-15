@@ -1,0 +1,399 @@
+package com.wap.sohu.mobilepaper.web;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.Banner;
+import com.wap.sohu.mobilepaper.model.ClientCancelPub;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.Publication;
+import com.wap.sohu.mobilepaper.model.Subscription;
+import com.wap.sohu.mobilepaper.model.SubscriptionType;
+import com.wap.sohu.mobilepaper.model.UserSubscribe;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.INewsService;
+import com.wap.sohu.mobilepaper.service.ISubscriptionApiService;
+import com.wap.sohu.mobilepaper.util.ClientUtil;
+import com.wap.sohu.mobilepaper.util.DateUtil;
+import com.wap.sohu.mobilepaper.util.HttpUtil;
+import com.wap.sohu.mobilepaper.util.JSonUtil;
+import com.wap.sohu.mobilepaper.util.ParseUtil;
+import com.wap.sohu.mobilepaper.util.RenderUtil;
+
+@Controller
+public class ClientSubscribeController {
+
+	private static final Logger logger = Logger.getLogger(ClientSubscribeController.class);
+
+	@Autowired
+	protected INewsService newsService;
+
+	@Autowired
+	protected ISubscriptionApiService subscriptionApiService;
+	@Autowired
+	protected IClientService clientService;
+
+	/**
+	 * 获取我的订阅
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/subscribe/mySubscribe.go")
+	public String mySubscribe(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String ip = HttpUtil.getIpAddr(request);
+		int productId = 1;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId();
+		}
+		System.out.println("productId==" + productId);
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = subscriptionApiService.getMySubscribeJson(clientUser, clientInstallSend, productId);
+			LogWriter.subLog("mySubJSon:" + ip + "\t cid=" + clientUser.getCid() + "\t" + DateUtil.getDate("") + "\t"
+					+ request.getQueryString() + "\t" + jsonString);
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			String myXml = subscriptionApiService.getMySubscribeXml(clientUser, clientInstallSend, productId);
+			LogWriter.subLog("mySubXml:" + ip + "\t cid=" + clientUser.getCid() + "\t" + DateUtil.getDate("") + "\t"
+					+ request.getQueryString() + "\t" + myXml);
+			RenderUtil.renderXml(response, myXml);
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/subscribe/allSubscribe.go")
+	public String allSubscribe(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int productId = 1;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId(); 
+		}
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String key = HttpUtil.getRequestString(request, "key", "");
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = (subscriptionApiService.getAllSubscribeJson(clientUser,clientInstallSend, productId, key));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, subscriptionApiService.getAllSubscribeXml(clientUser,clientInstallSend, productId, key));
+		}
+		return null;
+	}
+	
+	/**
+	 * V2.3首页接口
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/subscribe/homev3.go")
+	public String homev3(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int productId = 1;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId(); 
+		}
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String key = HttpUtil.getRequestString(request, "key", "");
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = (subscriptionApiService.getAllSubscribeJson_v3(clientUser,clientInstallSend, productId, key));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, subscriptionApiService.getAllSubscribeXml_v3(clientUser,clientInstallSend, productId, key));
+		}
+		return null;
+	}
+
+	/**
+	 * 向服务器上传用户设置的订阅信息
+	 * @param model
+	 * @param request
+	 * @param response
+	 * @return
+	 */
+	@RequestMapping(value = "/subscribe/change.go")
+	public String change(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long startTime = System.currentTimeMillis();
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String ip = HttpUtil.getIpAddr(request);
+		long cid = 100;
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser != null) {
+			cid = clientUser.getCid();
+		}
+		int productId = 1;
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId();
+		}
+		String yes = HttpUtil.getRequestString(request, "yes", "");
+		String no = HttpUtil.getRequestString(request, "no", "");
+		boolean isPhone = false;
+		if("json".equalsIgnoreCase(rt)){
+			isPhone = true;
+		}
+		String statusCode = subscriptionApiService.changeSubscribe(productId, cid, yes, no,isPhone);
+		String msg = "退订成功！";
+		if (StringUtils.isNotBlank(yes)) {
+			msg = "订阅成功！";
+		}
+		if ("500".equalsIgnoreCase(statusCode)) {
+			msg = "订阅设置失败，请稍后再试！";
+		}
+		StringBuilder builder = new StringBuilder();
+		builder.append("changeSub:\t");
+		builder.append(ip);
+		builder.append("\t");
+		builder.append(DateUtil.getDate(""));
+		builder.append("\t");
+		builder.append(request.getQueryString());
+		builder.append("\t cid:");
+		builder.append(cid);
+		builder.append("\t yes:");
+		builder.append(yes);
+		builder.append("\t");
+		builder.append(no);
+		builder.append("\t");
+		builder.append(statusCode);
+		LogWriter.subLog(builder.toString());
+		long userTime = System.currentTimeMillis() - startTime;
+		System.out .println("useTime:subscribeChange =" + (userTime) + "ms  yes:=" + yes+"\t no:="+no);
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = JSonUtil.getJSONStringFromXml(ClientUtil.getReturnXml(statusCode, msg));
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			RenderUtil.renderXml(response, ClientUtil.getReturnXml(statusCode, msg));
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/subscribe/home.go")
+	public String home(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		String rt = HttpUtil.getRequestString(request, "rt");
+		String v = HttpUtil.getRequestString(request, "v");
+		String mySub = HttpUtil.getRequestString(request, "mySub");
+		String needImages = HttpUtil.getRequestString(request, "images","1");
+		String defaultSub = HttpUtil.getRequestString(request, "defaultSub","0");
+		boolean needDefault = ("1".equalsIgnoreCase(defaultSub))?true:false;
+		Map<Integer, Integer> readMap = getReadMap(v);
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		int productId = 1;
+		ClientInstall clientInstallSend = (ClientInstall) request.getAttribute("clientInstall");
+		if (clientInstallSend != null) {
+			productId = clientInstallSend.getProductId();
+		}
+		List<Banner> homeTermList = null;
+		if("1".equalsIgnoreCase(needImages)){
+			homeTermList = subscriptionApiService.getHomeBannerList(productId, clientUser);
+		}else{
+			homeTermList = new ArrayList<Banner>();
+		}
+		if ("json".equalsIgnoreCase(rt)) {
+			String jsonString = subscriptionApiService.getHomeCountJson(homeTermList, getReadTermIdList(v), readMap,
+					clientUser, clientInstallSend, productId, mySub, needDefault);
+			RenderUtil.renderJson(response, jsonString);
+		} else {
+			String myXml = subscriptionApiService.getHomeCountXml(homeTermList, getReadTermIdList(v), readMap,
+					clientUser, clientInstallSend, productId, mySub, needDefault);
+			RenderUtil.renderXml(response, myXml);
+		}
+		return null;
+	}
+
+	@RequestMapping(value = "/subscribe/clearCache.go")
+	public String clearCache(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		subscriptionApiService.clearSubCacheMap();
+		Document doc = DocumentHelper.createDocument();
+		doc.setXMLEncoding("UTF-8");
+		Element rootElement = doc.addElement("root");
+		Element element = rootElement.addElement("msg");
+		element.setText("清理缓存成功！");
+		RenderUtil.renderXml(response, doc.asXML());
+		return null;
+	}
+
+	@RequestMapping(value = "/subscribe/mpnws_subcenter.go", params = "m=list")
+	public String subCenter(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		setSubCenterData(model, request);
+		return ClientUtil.showPage(request, "subcenter/list", "subcenter/listLow");
+	}
+	
+	@RequestMapping(value = "/subscribe/mpnws_subcenter.go", params = "m=mysubs")
+	public String subCenterMySubs(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		setSubCenterData(model, request);
+		return ClientUtil.showPage(request, "subcenter/mysubs", "subcenter/mysubsLow");
+	}
+	
+	private void setSubCenterData(ModelMap model, HttpServletRequest request) {
+		int productId = ClientUtil.getProductIdFromRequest(request);
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		if (clientUser == null) {
+			long cid = ClientUtil.getCidFromRequest(request);
+			clientUser = new ClientUser();
+			clientUser.setCid(cid);
+		}
+
+		List<SubscriptionType> subTypeList = subscriptionApiService.listSubscribeType(productId);
+		filterSubscriptionType(subTypeList, clientUser);
+		List<UserSubscribe> mySubscribeList = subscriptionApiService.listUserSubscribe(clientUser, productId);
+		model.addAttribute("SubscrbieTypeList", subTypeList);
+		model.addAttribute("MySubscriptions", mySubscribeMap(mySubscribeList));// 我的订阅列表
+		model.addAttribute("Cid", ClientUtil.getCidFromRequest(request));
+	}
+	
+	private void filterSubscriptionType(List<SubscriptionType> subTypeList, ClientUser clientUser) {
+		if(clientUser == null){
+			return ;
+		}
+		if(StringUtils.containsIgnoreCase(clientUser.getPlatform(), "symbian")) {
+			Iterator<SubscriptionType> it = subTypeList.iterator();
+			while(it.hasNext()) {
+				SubscriptionType subType = it.next();
+				if(subType.getName().contains("团购")) {
+					it.remove();
+				}
+			}
+		}
+	}
+	
+
+	@RequestMapping(value = "/subscribe/mpnws_subcenter.go", params = "m=doSubscribe")
+	public String doSubscribe(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		int productId = ClientUtil.getProductIdFromRequest(request);
+		long cid = ClientUtil.getCidFromRequest(request);
+		ClientUser clientUser = (ClientUser) request.getAttribute("clientUser");
+		String subId = request.getParameter("subId");
+		int operation = ParseUtil.paseInt(request.getParameter("op"), 0);// 0--订阅
+																			// 1--退订
+		String yes = null;
+		String no = null;
+
+		if (cid > 0 && productId > 0) {
+			if (operation == 0) {
+				yes = subId;
+			} else if (operation == 1) {
+				no = subId;
+			}
+			subscriptionApiService.changeSubscribe(productId, cid, yes, no);
+			Subscription sub = subscriptionApiService.getSubscription(productId, ParseUtil.paseInt(subId, 0));
+			model.addAttribute("Subscription", sub);
+			model.addAttribute("Code", 1);
+			if(clientUser != null && clientUser.getPlatform() != null) {
+				if(StringUtils.containsIgnoreCase(clientUser.getPlatform(), "symbian") &&
+						StringUtils.containsIgnoreCase(clientUser.getPlatformVersion(), "symbian3"))
+				model.addAttribute("Platform", "symbian3");
+			}
+			model.addAttribute("Op", operation);
+		} else {
+			model.addAttribute("Code", 0);
+		}
+
+		return ClientUtil.showPage(request, "subcenter/change", "subcenter/changeLow");
+	}
+
+	@RequestMapping(value = "/subscribe/update.go")
+	public String updateSubscribe(ModelMap model, HttpServletRequest request, HttpServletResponse response) {
+		long cid = ClientUtil.getCidFromRequest(request);
+		ClientUser clientUser = subscriptionApiService.updateUserSubcribeList(cid);
+		
+		Map<String, Subscription> subMap = new HashMap<String, Subscription>();
+		Map<Integer, List<Integer>> cancelPubMap = new HashMap<Integer, List<Integer>>();
+		for (Integer productId : clientUser.getApiVersionMap().keySet()) {
+			List<Subscription> subList = subscriptionApiService.listValidSubscriptionInfo(productId); 
+			for (Subscription s : subList) {
+				subMap.put(productId+"_"+s.getId(), s);
+			} 
+			List<Integer> cancelPubList = clientService.getCanceledPubs(clientUser, productId, ClientCancelPub.CANCEL_PUB);
+			cancelPubMap.put(productId, cancelPubList); 
+		}
+		model.addAttribute("subMap", subMap);
+		model.addAttribute("cancelPubMap", cancelPubMap);
+		
+		List<Publication> publicationList = clientService.listPublication();
+		Map<Integer, Publication> pubMap = new HashMap<Integer, Publication>();
+		for (Publication pub :publicationList) { 
+				pubMap.put(pub.getId(), pub); 
+		}
+		model.addAttribute("pubMap", pubMap);
+		model.addAttribute("clientUser", clientUser);
+		if(clientUser.getSubscribeListMap()!=null){
+			for(Integer productId:clientUser.getSubscribeListMap().keySet()){
+				List<UserSubscribe> presult = clientUser.getSubscribeListMap().get(productId);
+			}
+		}
+		return "subcenter/result";
+	}
+
+	public Map<Integer, UserSubscribe> mySubscribeMap(List<UserSubscribe> mySubscribeList) {
+		Map<Integer, UserSubscribe> map = new HashMap<Integer, UserSubscribe>();
+		if (mySubscribeList == null) {
+			return null;
+		}
+		for (UserSubscribe us : mySubscribeList) {
+			map.put(us.getSubId(), us);
+		}
+		return map;
+	}
+
+	public List<Integer> getReadTermIdList(String v) {
+		List<Integer> readList = new ArrayList<Integer>();
+		if (StringUtils.isNotBlank(v)) {
+			String[] vs = v.split(";");
+			for (String t : vs) {
+				if (StringUtils.isNotBlank(t)) {
+					String[] temps = t.split(":");
+					if (temps != null && temps.length == 2) {
+						if (NumberUtils.isNumber(temps[0]) && NumberUtils.isNumber(temps[1])) {
+							readList.add(Integer.parseInt(temps[0]));
+						}
+					}
+				}
+			}
+		}
+		return readList;
+	}
+
+	public Map<Integer, Integer> getReadMap(String v) {
+		Map<Integer, Integer> readMap = new HashMap<Integer, Integer>();
+		if (StringUtils.isNotBlank(v)) {
+			String[] vs = v.split(";");
+			for (String t : vs) {
+				if (StringUtils.isNotBlank(t)) {
+					String[] temps = t.split(":");
+					if (temps != null && temps.length == 2) {
+						if (NumberUtils.isNumber(temps[0]) && NumberUtils.isNumber(temps[1])) {
+							readMap.put(Integer.parseInt(temps[0]), Integer.parseInt(temps[1]));
+						}
+					}
+				}
+			}
+		}
+		return readMap;
+	}
+
+}

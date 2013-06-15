@@ -1,0 +1,41 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.ChannelPub;
+
+@Repository("channelPubDao")
+public class ChannelPubDao extends BaseJdbcSupport {
+	public List<Integer> getPubsByChannelId(String channelId) {
+		String SQL = "select pubId from o_channel_pub where channelId = '" +channelId+"'" ;
+		return this.getJdbcTemplate().query(SQL,
+				new pubIdMapper());
+	}
+	
+	public List<ChannelPub> list(){
+		return getJdbcTemplate().query(
+				"select * from o_channel_pub",
+				new dataMapper());
+	}
+	
+	private class pubIdMapper implements RowMapper<Integer> {
+		public Integer mapRow(ResultSet rs, int rowNum) throws SQLException {
+			return rs.getInt("pubId");
+		}
+	}
+	
+	private class dataMapper implements RowMapper<ChannelPub> {
+		public ChannelPub mapRow(ResultSet rs, int rowNum) throws SQLException {
+			ChannelPub x_ret = new ChannelPub();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setChannelId(rs.getString("channelId"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			return x_ret;
+		}
+	}
+}

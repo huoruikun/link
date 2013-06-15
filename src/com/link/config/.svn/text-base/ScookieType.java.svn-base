@@ -1,0 +1,6 @@
+package com.wap.sohu.mobilepaper.conf;
+
+public enum ScookieType {
+	COMMON, 
+	WINPHONE
+}

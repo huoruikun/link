@@ -1,0 +1,179 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+
+import com.wap.sohu.mobilepaper.log.LogWriter;
+import com.wap.sohu.mobilepaper.model.CheckResult;
+import com.wap.sohu.mobilepaper.model.ClientInstall;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.model.UpdateRule;
+import com.wap.sohu.mobilepaper.model.VersionRelease;
+
+public final class SoftUpdateUtil {
+	private static final String TAG = "[SoftUpdateUtil] : ";
+
+	private static Logger logger = Logger.getLogger(SoftUpdateUtil.class);
+	private static SoftUpdateUtil instance = new SoftUpdateUtil();
+	
+	public static SoftUpdateUtil getInstance(){
+		return instance;
+	}
+	
+	public boolean assertEqual(UpdateRule rule, Map<String, String> params){
+		String req_value = params.get(rule.getAttribute());
+		if(req_value!=null && rule.getValue().compareToIgnoreCase(req_value)==0){
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean assertNotEqual(UpdateRule rule, Map<String, String> params){
+		String req_value = params.get(rule.getAttribute());
+		
+		//logger.info(TAG + rule.getAttribute()+ "="+req_value +"rule_value="+rule.getValue());
+		if(req_value==null || rule.getValue().trim().compareToIgnoreCase(req_value)!=0){
+			//logger.info(TAG+"return true");
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean assertIn(UpdateRule rule, Map<String, String> params){
+		String req_value = params.get(rule.getAttribute());
+		return isInStrList(req_value, rule.getValue(), ",");
+	}
+	
+	public boolean assertNotIn(UpdateRule rule, Map<String, String> params){
+		String req_value = params.get(rule.getAttribute());
+		if(req_value==null || req_value.length()==0 || !isInStrList(req_value, rule.getValue(), ",")){
+			return true;
+		}
+		return false;
+	}
+	
+	public int checkUpdateType(final VersionRelease vr, String version){
+		if(version==null || version.length()==0){
+			return CheckResult.NO_UPDATE_TYPE;
+		}
+		if(isInStrList(version, vr.getEnforcement(), ",")){
+			return CheckResult.UPDATE_TYPE_MUST;
+		}else if(isInStrList(version, vr.getImportant(), ",")){
+			return CheckResult.UPDATE_TYPE_IMPORTANT;
+		}else if(isInStrList(version, vr.getOptional(), ",")){
+			return CheckResult.UPDATE_TYPE_ALERT;
+		}
+		return CheckResult.NO_UPDATE_TYPE;
+	}
+	
+	public static String saveUploadFile(HttpServletRequest request, String fieldName, VersionRelease vr){
+//		MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+//		MultipartFile picfile  =  multipartRequest.getFile(fieldName);  
+//		if(!picfile.isEmpty()){
+//			try {
+//				byte[] img = picfile.getBytes();
+//				String name = picfile.getOriginalFilename();
+//				String referPath = vr.getPlatform()+"/"+vr.getVersion()+"/"+name;
+//				String filename = Config.RELEASE_BASE_DIR+referPath;	
+//				ImageUtil.saveImage(img, filename);
+//				vr.setUrl(Config.RELEASE_BASE_URL+referPath);
+//				vr.setSize(img.length);
+//				//logger.info(TAG+vr.getUrl());
+//				//logger.info(TAG+vr.getSize());
+//				return filename;
+//			} catch (IOException e) {
+//				e.printStackTrace();
+//			}
+//		}
+		return null;
+	}
+	
+	/**
+	 * 检测特定字符串是不是某个字符串列表中的一项
+	 * @param testStr 被检测串 ，如def
+	 * @param listStr 列表字符串，如abc,def,hhh
+	 * @return
+	 */
+	public boolean isInStrList(String testStr, String listStr, String split){
+		if(listStr.trim().equals("*")){
+			return true;
+		}
+		if(testStr!=null && listStr!=null){
+			String[] temp = listStr.split(split);
+			for(String value : temp){
+				if(testStr.compareToIgnoreCase(value)==0){
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	public Map<String, String> getParamsMap(HttpServletRequest request, boolean isTest){
+		Map<String, String> params = null;
+		
+		Enumeration<String> paraNames = request.getParameterNames();			
+		while(paraNames.hasMoreElements()){
+			String paraName = paraNames.nextElement();
+			String value = request.getParameter(paraName);
+			if(params == null){
+				params = new HashMap<String, String>();
+			}
+			params.put(paraName, value);
+		}	
+		
+		if(isTest){//获取表单中输入的name value对
+			for(int i=0; i<100; i++){
+				String name = request.getParameter("name"+i);
+				String value = request.getParameter("value"+i);
+				if(name!=null && name.length()==0){
+					break;
+				}
+				if(params == null){
+					params = new HashMap<String, String>();
+				}
+				params.put(name, value);
+			}
+		}
+		
+		return params;
+	}
+	
+	public void save2UpgradeLog(final ClientUser user, final ClientInstall install, final ClientInstall oldInstall){
+		try{
+			String oldVersion = "";
+			String newVersion = "";
+			String platform = "";
+			String platformVersion = "";
+			int productId = 0;
+			long cid = 0;
+			int type = 0;//0安装，1升级
+			
+			if(user != null){
+				cid = user.getCid();
+				platform = user.getPlatform();
+				platformVersion = user.getPlatformVersion();
+			}
+			if(install != null){
+				productId = install.getProductId();
+				newVersion = install.getVersion();
+			}
+			if(oldInstall != null){
+				oldVersion = oldInstall.getVersion();
+				type = 1;
+			}
+			
+			//[date] cid:xx, productId:xxx, platform:xxx, platformVersion:xxx, oldVersion:xxx, newVersion:xxx, type:xxx
+			LogWriter.upgradelog("cid: "+cid+", productId:"+productId+", platform: "+platform+", platformVersion: "+platformVersion+
+					", oldVersion: "+oldVersion+", newVersion: "+newVersion+", type:"+type);
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}
+}

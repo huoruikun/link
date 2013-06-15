@@ -1,0 +1,37 @@
+package com.wap.sohu.mobilepaper.dao;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
+import org.springframework.stereotype.Repository;
+
+import com.wap.sohu.mobilepaper.model.PublicationPage;
+
+@Repository("publicationPageDao")
+public class PublicationPageDao extends BaseJdbcSupport {
+
+	public List<PublicationPage> list(int pubId){
+		String queryString = "select * from p_publication_page where pubId=? and is_delete=0";
+		return getJdbcTemplate().query(
+				queryString, new Object[]{pubId}, new dataMapper());
+	}
+	
+	class dataMapper implements RowMapper<PublicationPage> {
+
+		@Override
+		public PublicationPage mapRow(ResultSet rs, int arg1)
+				throws SQLException {
+			PublicationPage x_ret = new PublicationPage();
+			x_ret.setId(rs.getInt("id"));
+			x_ret.setPubId(rs.getInt("pubId"));
+			x_ret.setPageId(rs.getInt("pageId"));
+			x_ret.setPosition(rs.getInt("position"));
+			x_ret.setIs_default(rs.getInt("is_default"));
+			return x_ret;
+		}
+		
+	}
+}

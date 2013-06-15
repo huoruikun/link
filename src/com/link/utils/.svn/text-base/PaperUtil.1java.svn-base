@@ -1,0 +1,176 @@
+package com.wap.sohu.mobilepaper.util;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.sohu.wap.sso.util.Md5Util;
+import com.wap.sohu.mobilepaper.conf.SysConfig;
+
+public class PaperUtil {
+	
+	public static String SMS_ALERT_INFO_TITLE = "【接口问题】";
+	public static String SMS_ALERT_INFO_CONTENT = "期刊地址不存在,期刊id=";
+	private static AtomicInteger ZIP_LIST_INDEX = new AtomicInteger(0);
+	private static int ZIP_LIST_SIZE = SysConfig.ZIP_IPS.size();
+	private static Map<String,Integer> ERROR_IP_INFO  = new ConcurrentHashMap<String,Integer>();
+	
+	private static LRUMap<String,List<String>> urlMap = new LRUMap<String,List<String>>("urlmap",60,600);
+	
+	public static  String getURL(int pubId,long termId,Date date,int modelType,int cityCode,String suffix) {
+		String key  = pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"/"+suffix;
+		String md5Key = Md5Util.MD5Encode(key);
+		List<String> ips = urlMap.get(md5Key);
+		if(ips ==null){ 
+			ips = new ArrayList<String>();
+			for(String ip:SysConfig.ZIP_IPS){
+				if(HttpUtil.openUrl("http://"+ip+"/mpaper/"+key) == false){
+					Integer info = ERROR_IP_INFO.get(ip); //出错统计
+					if(info !=null){
+						if(info>10){
+							PaperUtil.sendMsgAlert(PaperUtil.SMS_ALERT_INFO_TITLE,PaperUtil.SMS_ALERT_INFO_CONTENT+pubId);//加入出错机制处理
+						}
+						ERROR_IP_INFO.put(ip, info++);
+					}else{
+						ERROR_IP_INFO.put(ip,1);
+					}	
+				}else{
+					ips.add(ip);
+				}
+			}
+			urlMap.put(md5Key,ips);
+		}
+		
+		int size = ips.size();
+		if(size>0){
+			int index = new Random().nextInt(size);
+			String ip = ips.get(index);
+			if(StringUtils.isEmpty(ip)){
+				return null;
+			}
+			return "http://"+ip+"/mpaper/"+key;
+		}
+		return null;
+	}
+	
+	
+	/**
+	 * 返回html 地址
+	 * @param pubId
+	 * @param termId
+	 * @param date
+	 * @param modelType
+	 * @param cityCode
+	 * @param suffix
+	 * @return
+	 */
+	public static String getHtmlUrl(int pubId,long termId,Date date,int modelType,int cityCode,String suffix){
+		return SysConfig.PAGE_STATIC_URL_ROOT+pubId+"/"+DateUtil.getDate(date,"yyyyMMdd")+"/"+termId+"_"+modelType+"_"+cityCode+"/"+suffix;
+	}
+	
+	
+	public static long[] alreadyGetTermIds(String messageClass,String splitFlag) {
+		long[] had = new long[0];
+		if (messageClass.length() > 0) {
+			String messageClassArray[] = messageClass.split("_");
+			if (messageClassArray.length == 2) {
+				String[] termIds = messageClassArray[1].split(splitFlag);
+				had = new long[termIds.length];
+				for (int i = 0; i < termIds.length; i++) {
+					if(StringUtils.isNotEmpty(termIds[i])){
+						try{
+							had[i] = Long.parseLong(termIds[i]);
+						}catch (Exception e) {
+						}
+					}	
+				}
+			}
+		}
+		return had;
+	}
+	
+	
+	public static boolean hasGet(long id, long[] had) {
+		for (long termId : had) {
+			if (termId == id) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 发送短信报警
+	 * @param title
+	 * @param content
+	 * @return
+	 */
+	public static boolean sendMsgAlert(String title,String content){
+		if(StringUtils.isEmpty(SysConfig.SMS_ALERT_URL)){
+			System.out.println("SMS_ALERT_URL is not =====================");
+			return false;
+		}	
+		
+		StringBuilder url = new StringBuilder(SysConfig.SMS_ALERT_URL);
+		url.append("?");
+		url.append("t=");
+		
+		try {
+			url.append(URLEncoder.encode(title, "utf-8"));
+			url.append("&c=");
+			url.append(URLEncoder.encode(content, "utf-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return false;
+		}
+		
+		url.append("&id=");
+		url.append(content.hashCode());
+		
+		if(StringUtils.equals(HttpUtil.getUrlContent(url.toString()),"SUCC")){
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * 根据手机系统及版本 取到显示字体大小
+	 * @param platform
+	 * @param platformVersion
+	 * @return
+	 */
+	public static int getFontByPhoneSystem(String platform,String platformVersion){
+		int font = 14;
+		
+		if(StringUtils.isEmpty(platform)){
+			return font;
+		}
+		
+		if(platform.equalsIgnoreCase("iphone") || platform.equalsIgnoreCase("Android")){ //iphone android 高档触屏
+			font = 18;
+		}else if(platform.equalsIgnoreCase("Symbian")){ //symbian 低档触屏
+			if(StringUtils.isNotEmpty(platformVersion) && platformVersion.indexOf("V5") !=-1)
+			   font = 20;
+		}
+		return font;
+	}
+	
+	public static String getZipIpFromList(){
+		System.out.println("");
+		String ip = SysConfig.ZIP_IPS.get(ZIP_LIST_INDEX.get());
+		ZIP_LIST_INDEX.incrementAndGet();
+		if(ZIP_LIST_INDEX.get()>=ZIP_LIST_SIZE)
+			ZIP_LIST_INDEX.set(0);
+		
+		return ip;  
+	}
+}

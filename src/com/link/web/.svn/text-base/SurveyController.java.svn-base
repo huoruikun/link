@@ -1,0 +1,221 @@
+/*
+ * Title: 搜狐快递
+ * Description: 搜狐快递服务端
+ * Author: Alex Lee
+ * Email: alexlee@sohu-inc.com
+ * Version: 2.0
+ * Created on: 2010-11-8 下午02:57:17
+ *
+ * Copyright (c) 2010 SOHU.COM
+ */
+package com.wap.sohu.mobilepaper.web;
+
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import com.sohu.wap.sso.util.ParseUtil;
+import com.wap.sohu.mobilepaper.model.ClientUser;
+import com.wap.sohu.mobilepaper.service.IClientService;
+import com.wap.sohu.mobilepaper.service.SurveyService;
+import com.wap.sohu.mobilepaper.util.HeaderDataUtil;
+import com.wap.sohu.mobilepaper.util.PaperUtil;
+
+/**
+ * @author alex.lee at 2010-11-8 下午02:57:17
+ *
+ * desc： 
+ */
+@Controller
+public class SurveyController{
+
+	@Autowired
+	public SurveyService surveyService;
+	
+	@Autowired
+	public IClientService clientService;
+	
+	@RequestMapping("/survey.go")
+	public String survey(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		String cid = request.getParameter("p1");
+		int survey_id = ParseUtil.paseInt(request.getParameter("sid"), 0);
+		
+		try {
+			 cid = new String(Base64.decodeBase64(URLDecoder.decode(cid, "utf-8").getBytes("utf-8")));
+		} catch (Exception e1) {
+			//e1.printStackTrace();
+		}
+		String backUrl = request.getParameter("backUrl");
+		if(backUrl == null){
+			backUrl = "";
+		}
+		
+		try {
+			backUrl = URLDecoder.decode(backUrl,"utf-8");
+			model.addAttribute("backUrl2",URLEncoder.encode(backUrl,"utf-8"));
+		} catch (Exception e1) {
+			//e1.printStackTrace();
+		}
+		model.addAttribute("backUrl",backUrl);
+		if(StringUtils.isEmpty(cid)){
+			cid = "0";
+		}else {
+			try {
+				int c = Integer.parseInt(cid);
+				//if(surveyService.isSurvey(survey_id, c)){ //投过票
+				//	return "redirect:/surveyOk.go?backUrl="+URLEncoder.encode(backUrl,"utf-8");
+				//}
+				ClientUser clientUser = clientService.getClientUser(c);
+				  //字体大小及行高
+				
+				//int productIdSend = 1;
+				//String productIdSendStr = (String)request.getAttribute("u");
+				//try{
+				//	productIdSend = Integer.parseInt(productIdSendStr);
+				//}catch(Exception e){
+				//	e.printStackTrace();
+				//}
+				
+				
+			    int font = HeaderDataUtil.getClientSet(request).getFont();
+			    if(font ==0)
+			    	font =  PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(),clientUser.getPlatformVersion());
+			    if(font == 0){
+					font = 18;
+				}
+			    model.addAttribute("font",font);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		if(cid==null || cid.length()==0 || cid.equals("0")){
+			cid = request.getParameter("cid");
+		}
+		model.addAttribute("cid",cid);
+		return "survey/survey";
+	}
+	
+	/**
+	 * 保存用户调查结果
+	 * 如果有用户id，已经提交过该问卷，则直接返回；没有提交过，则进行保存结果
+	 * 如果没有用户id，不保存提交问卷的用户信息，但是保存问卷结果 
+	 * @param request
+	 * @param response
+	 * @param model
+	 * @return
+	 */
+	@RequestMapping("/saveSurvey.go")
+	public String saveSurvey(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		String cid = request.getParameter("cid");
+		String backUrl = request.getParameter("backUrl");
+		int survey_id = ParseUtil.paseInt(request.getParameter("sid"), 0);		
+		String phoneNumber = request.getParameter("phoneNumber");
+		
+		try {
+			backUrl = URLDecoder.decode(backUrl,"utf-8");
+			backUrl = URLEncoder.encode(backUrl,"utf-8");
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+
+		//这次的调查问卷必须2个问题都回答，不然不让提交
+		String option1 = request.getParameter("RadioGroup1");
+		String option2 = request.getParameter("RadioGroup2");
+		if(option1 == null || option2 == null || option1.length() == 0 || option2.length() == 0){
+			try{
+				int font = HeaderDataUtil.getClientSet(request).getFont();
+				if(font ==0){
+					//long cid = ParseUtil.paseLong(request.getParameter("cid"), 0);
+					ClientUser clientUser = clientService.getClientUser(Integer.parseInt(cid));
+					if(clientUser != null){
+						font =  PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(),clientUser.getPlatformVersion());
+					}
+				}
+				if(font == 0){
+					font = 18;
+				}
+				model.addAttribute("font",font);
+				model.addAttribute("backUrl",backUrl);
+				
+				model.addAttribute("backUrl2",URLEncoder.encode(backUrl,"utf-8"));
+				model.addAttribute("cid",cid);
+				model.addAttribute("alert", 1);
+				return "survey/survey";
+			}catch(Exception e){
+				
+			}
+		}
+		
+		int c = 0 ;
+		if(StringUtils.isNotEmpty(cid)){
+			try {
+				c = Integer.parseInt(cid);
+				System.out.println("check survey client" + survey_id + "_" + c);
+				if(surveyService.isSurvey(survey_id, c)){
+					return "redirect:/mpnws_surveyOk.go?cid="+c+"&backUrl="+backUrl+"&x=1";
+				}else{
+					surveyService.saveSurveyClient(survey_id, c, phoneNumber);
+					System.out.println("save survey client" + survey_id + "_" + c);
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+				surveyService.saveSurveyClient(survey_id, c, phoneNumber);
+			}
+		}else{
+			surveyService.saveSurveyClient(survey_id, c, phoneNumber);
+		}
+
+		
+		
+		try{
+			for(int i=1;i<12;i++){ //写死暂时用
+				String optionValue[] = request.getParameterValues("RadioGroup"+i);
+				if(optionValue != null){
+					for(String option:optionValue){
+						if(StringUtils.isNotEmpty(option)){
+							int option_id = ParseUtil.paseInt(option, -1);
+							surveyService.saveSurveyResult(survey_id, c, i, option_id, option);
+							System.out.println("save "+survey_id + "_"+c+"_"+i+"_"+option);
+						}
+					}
+				}
+			}
+		}catch (Exception e) {
+			e.printStackTrace();
+		}
+		return "redirect:/mpnws_surveyOk.go?cid="+c+"&backUrl="+backUrl;
+	}
+	
+	@RequestMapping("/mpnws_surveyOk.go")
+	public String surveyOk(HttpServletRequest request,
+			HttpServletResponse response,Model model){
+		String backUrl = request.getParameter("backUrl");
+		
+		int font = HeaderDataUtil.getClientSet(request).getFont();
+		if(font ==0){
+			long cid = ParseUtil.paseLong(request.getParameter("cid"), 0);
+			ClientUser clientUser = clientService.getClientUser(cid);
+			if(clientUser != null){
+				font =  PaperUtil.getFontByPhoneSystem(clientUser.getPlatform(),clientUser.getPlatformVersion());
+			}
+		}
+		if(font == 0){
+			font = 18;
+		}
+		model.addAttribute("font",font);
+		model.addAttribute("backUrl",backUrl);
+		return "survey/ok";
+	}
+	
+}
