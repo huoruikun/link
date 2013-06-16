@@ -3,9 +3,8 @@ package com.link.helper;
 import java.io.StringWriter;
 import java.util.Date;
 
-import org.codehaus.jackson.JsonGenerator;
-import org.codehaus.jackson.map.ObjectMapper;
-
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.link.domain.UserModel;
 import com.link.param.ResultParam;
 
