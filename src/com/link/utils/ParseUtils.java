@@ -1,52 +1,52 @@
 package com.link.utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import edu.emory.mathcs.backport.java.util.Arrays;
-
 public class ParseUtils {
-	
+
 	private static final Object obj = new Object();
 
-	public static int paseInt(String s,int defaultV){
+	public static int paseInt(String s, int defaultV) {
 		int r = defaultV;
-		try{
+		try {
 			r = Integer.parseInt(s);
-		}catch(Exception e){}
+		} catch (Exception e) {
+		}
 		return r;
 	}
 
-	public static long paseLong(String s,long defaultV){
+	public static long paseLong(String s, long defaultV) {
 		long r = defaultV;
-		try{
+		try {
 			r = Long.parseLong(s);
-		}catch(Exception e){}
+		} catch (Exception e) {
+		}
 		return r;
 	}
-	
-	public static float parseFloat(String s, float defaultV){
+
+	public static float parseFloat(String s, float defaultV) {
 		float r = defaultV;
-		try{
+		try {
 			r = Float.parseFloat(s);
-		}catch(Exception e){}
+		} catch (Exception e) {
+		}
 		return r;
 	}
-	
-	public static int[] parseIntArray(String[] s, int defaultValue){
-		if(s == null){
+
+	public static int[] parseIntArray(String[] s, int defaultValue) {
+		if (s == null) {
 			return null;
 		}
 		int[] x_ret = new int[s.length];
-		for(int i = 0; i < s.length; i ++){
+		for (int i = 0; i < s.length; i++) {
 			x_ret[i] = paseInt(s[i], defaultValue);
 		}
 		return x_ret;
 	}
-	
+
 	public static Map<Integer, Object> parseIntKeyMap(String s, String split) {
 		if (s == null || s.length() == 0) {
 			return null;
@@ -67,7 +67,7 @@ public class ParseUtils {
 
 		return map;
 	}
-	
+
 	public static List<Integer> parseIntList(String s, String split) {
 		if (s == null || s.length() == 0) {
 			return null;
@@ -82,7 +82,7 @@ public class ParseUtils {
 		}
 
 		List<Integer> x_ret = new ArrayList<Integer>();
-		for(int i : arrayInt) {
+		for (int i : arrayInt) {
 			x_ret.add(i);
 		}
 
