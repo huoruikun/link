@@ -1,6 +1,6 @@
 build.xml
-classpath
-gitignore
+.classpath
+.gitignore
 project
 .project.bak
 settings/
