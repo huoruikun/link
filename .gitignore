@@ -1,0 +1,7 @@
+build.xml
+classpath
+gitignore
+project
+.project.bak
+settings/
+webapp/WEB-INF/classes/
